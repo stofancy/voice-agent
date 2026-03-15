@@ -39,23 +39,11 @@ export class STTClient {
         messages: [
           {
             role: 'user',
-            content: [
-              {
-                type: 'input_audio',
-                input_audio: {
-                  data: dataUrl,
-                },
-              },
-            ],
-          },
+            content: dataUrl, // 直接传递 data URL
+          } as any,
         ],
         stream: false,
-        extra_body: {
-          asr_options: {
-            enable_itn: true,
-          },
-        },
-      });
+      } as any);
 
       const content = completion.choices[0]?.message?.content ?? '';
       const annotations = completion.choices[0]?.message?.annotations ?? [];

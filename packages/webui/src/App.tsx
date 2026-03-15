@@ -1,19 +1,40 @@
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useVoiceStore } from './store/voiceStore';
+import { useRecorder } from './hooks/useRecorder';
 
 function App() {
   const {
     connectionState,
     sessionState,
     transcript,
-    isRecording,
     error,
     connect,
     disconnect,
+    sendAudio,
+    setTranscript,
+    setError,
+  } = useVoiceStore();
+
+  // 录音回调
+  const handleAudioData = useCallback((base64: string, isFinal: boolean) => {
+    sendAudio(base64, isFinal);
+  }, [sendAudio]);
+
+  const handleError = useCallback((error: Error) => {
+    setError(`录音失败：${error.message}`);
+  }, [setError]);
+
+  // 使用录音 Hook
+  const {
     startRecording,
     stopRecording,
-  } = useVoiceStore();
+    isRecording,
+  } = useRecorder({
+    onAudioData: handleAudioData,
+    onError: handleError,
+    sampleRate: 16000,
+  });
 
   useEffect(() => {
     // 自动连接到本地 WebSocket 服务器

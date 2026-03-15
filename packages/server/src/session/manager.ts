@@ -1,6 +1,6 @@
 // 会话管理器
 import { v4 as uuidv4 } from 'uuid';
-import type { SessionInfo, SessionState } from './types.js';
+import type { SessionInfo, SessionState } from '../types.js';
 
 export interface SessionManagerOptions {
   maxDurationMs?: number;

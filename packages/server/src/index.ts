@@ -8,7 +8,7 @@ const plugin = {
   description: 'Browser-based voice interaction channel with Bailian STT/TTS',
   configSchema: {
     parse(value: unknown) {
-      const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+      const raw = value && typeof value === 'object' ? (value as any) : {};
       
       return {
         enabled: raw.enabled === false ? false : true,

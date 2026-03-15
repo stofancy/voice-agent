@@ -17,13 +17,17 @@ interface VoiceState {
   // WebSocket
   ws: WebSocket | null;
   
+  // 音频播放
+  isPlaying: boolean;
+  audioQueue: Uint8Array[];
+  
   // Actions
   connect: (url: string) => Promise<void>;
   disconnect: () => void;
-  startRecording: () => void;
-  stopRecording: () => void;
+  sendAudio: (base64: string, isFinal: boolean) => void;
   setTranscript: (text: string) => void;
   setError: (error: string | null) => void;
+  playAudio: (base64: string) => void;
 }
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
@@ -33,6 +37,8 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   sessionState: 'idle',
   transcript: '',
   isRecording: false,
+  isPlaying: false,
+  audioQueue: [],
   ws: null,
 
   connect: async (url: string) => {
@@ -61,8 +67,18 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
             set({ transcript: message.data.text });
             break;
           case 'audio_output':
-            // TODO: 播放音频
-            console.log('[Audio] Received audio chunk');
+            // 播放音频
+            get().playAudio(message.data.payload);
+            break;
+          case 'agent_message':
+            // Agent 文本消息
+            console.log('[Agent] Message:', message.data.text);
+            break;
+          case 'error':
+            set({ 
+              error: `${message.error.code}: ${message.error.message}`,
+              sessionState: 'idle'
+            });
             break;
         }
       };
@@ -93,14 +109,29 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     }
   },
 
-  startRecording: () => {
-    set({ isRecording: true, sessionState: 'listening' });
-    // TODO: 开始录音并发送音频
-  },
+  sendAudio: (base64: string, isFinal: boolean) => {
+    const { ws, sessionState } = get();
+    
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      console.error('[WebSocket] Not connected');
+      return;
+    }
 
-  stopRecording: () => {
-    set({ isRecording: false, sessionState: 'processing' });
-    // TODO: 停止录音
+    // 发送音频数据
+    const message = {
+      type: 'audio',
+      data: {
+        payload: base64,
+        isFinal,
+      },
+    };
+
+    ws.send(JSON.stringify(message));
+    console.log(`[WebSocket] Audio sent (final: ${isFinal})`);
+
+    if (!isFinal) {
+      set({ isRecording: true, sessionState: 'listening' });
+    }
   },
 
   setTranscript: (text: string) => {
@@ -109,5 +140,66 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
 
   setError: (error: string | null) => {
     set({ error });
+  },
+
+  playAudio: (base64: string) => {
+    const { audioQueue, isPlaying } = get();
+    
+    // 解码 Base64
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+
+    // 添加到队列
+    const newQueue = [...audioQueue, bytes];
+    set({ audioQueue: newQueue });
+
+    // 如果当前没有在播放，开始播放
+    if (!isPlaying) {
+      get().processAudioQueue();
+    }
+  },
+
+  processAudioQueue: async () => {
+    const { audioQueue } = get();
+    
+    if (audioQueue.length === 0) {
+      set({ isPlaying: false, sessionState: 'idle' });
+      return;
+    }
+
+    set({ isPlaying: true, sessionState: 'speaking' });
+
+    // 取出第一个音频块
+    const [first, ...rest] = audioQueue;
+    set({ audioQueue: rest });
+
+    try {
+      // 播放音频
+      const audioContext = new AudioContext({ sampleRate: 24000 });
+      const audioBuffer = await audioContext.decodeAudioData(
+        first.buffer.slice(0)
+      );
+
+      const source = audioContext.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioContext.destination);
+      
+      await new Promise<void>((resolve) => {
+        source.onended = () => {
+          audioContext.close();
+          resolve();
+        };
+        source.start();
+      });
+
+      // 继续播放队列
+      get().processAudioQueue();
+    } catch (error) {
+      console.error('[Audio] Playback error:', error);
+      get().processAudioQueue(); // 继续播放下一个
+    }
   },
 }));
