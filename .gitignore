@@ -4,8 +4,11 @@ package-lock.json
 
 # Build output
 dist/
-*.d.ts
-*.js.map
+dist/**/*.d.ts
+dist/**/*.js.map
+
+# Source type declarations (keep these)
+# !src/**/*.d.ts
 
 # IDE
 .vscode/

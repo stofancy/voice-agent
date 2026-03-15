@@ -1,5 +1,5 @@
 // Voice Agent Plugin Entry Point
-import type { OpenClawPluginApi } from 'openclaw/plugin-sdk';
+import type { OpenClawPluginApi } from 'openclaw';
 import { voiceAgentPlugin } from './channel/plugin.js';
 
 const plugin = {

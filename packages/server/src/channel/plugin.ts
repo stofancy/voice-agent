@@ -1,5 +1,5 @@
 // OpenClaw Channel Plugin 实现
-import type { ChannelPlugin } from 'openclaw/plugin-sdk';
+import type { ChannelPlugin } from 'openclaw';
 import { SessionManager } from '../session/manager.js';
 import { VoiceAgentWebSocketServer } from '../websocket/server.js';
 
