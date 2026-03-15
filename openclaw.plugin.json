@@ -1,0 +1,112 @@
+{
+  "id": "voice-agent",
+  "name": "Voice Agent",
+  "description": "Browser-based voice interaction channel with Bailian STT/TTS",
+  "channels": ["voice-agent"],
+  "skills": ["./packages/server/skills"],
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": true
+      },
+      "serve": {
+        "type": "object",
+        "properties": {
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535,
+            "default": 8765
+          },
+          "path": {
+            "type": "string",
+            "default": "/voice-agent/stream"
+          },
+          "bind": {
+            "type": "string",
+            "default": "0.0.0.0"
+          }
+        }
+      },
+      "bailian": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": "string"
+          },
+          "sttModel": {
+            "type": "string",
+            "default": "qwen3-asr-flash"
+          },
+          "ttsModel": {
+            "type": "string",
+            "default": "qwen3-tts-instruct-flash"
+          },
+          "ttsVoice": {
+            "type": "string",
+            "default": "Cherry"
+          }
+        }
+      },
+      "audio": {
+        "type": "object",
+        "properties": {
+          "inputSampleRate": {
+            "type": "integer",
+            "default": 16000
+          },
+          "outputSampleRate": {
+            "type": "integer",
+            "default": 24000
+          }
+        }
+      },
+      "session": {
+        "type": "object",
+        "properties": {
+          "maxDurationMs": {
+            "type": "integer",
+            "default": 300000
+          },
+          "idleTimeoutMs": {
+            "type": "integer",
+            "default": 30000
+          }
+        }
+      },
+      "security": {
+        "type": "object",
+        "properties": {
+          "pairingRequired": {
+            "type": "boolean",
+            "default": true
+          }
+        }
+      }
+    }
+  },
+  "uiHints": {
+    "serve.port": {
+      "label": "WebSocket Port"
+    },
+    "serve.path": {
+      "label": "WebSocket Path"
+    },
+    "bailian.apiKey": {
+      "label": "Bailian API Key",
+      "sensitive": true
+    },
+    "bailian.sttModel": {
+      "label": "STT Model"
+    },
+    "bailian.ttsModel": {
+      "label": "TTS Model"
+    },
+    "bailian.ttsVoice": {
+      "label": "TTS Voice"
+    }
+  }
+}
