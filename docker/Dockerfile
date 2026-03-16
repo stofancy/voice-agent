@@ -1,15 +1,23 @@
 # Voice Agent Plugin - Custom OpenClaw Image
 FROM ghcr.io/openclaw/openclaw:latest
 
-# 代理配置（通过 build-arg 传入）
-ARG HTTP_PROXY
-ARG HTTPS_PROXY
-ARG NO_PROXY
+# 代理配置（带默认值，确保 build-arg 不传时也有值）
+ARG HTTP_PROXY=http://192.168.0.147:7890
+ARG HTTPS_PROXY=http://192.168.0.147:7890
+ARG NO_PROXY=localhost,127.0.0.1,.local
+
+# 打印代理配置（调试用）
+RUN echo "=== Build Time Proxy Config ===" && \
+    echo "HTTP_PROXY=$HTTP_PROXY" && \
+    echo "HTTPS_PROXY=$HTTPS_PROXY" && \
+    echo "NO_PROXY=$NO_PROXY"
 
 # 设置构建时环境变量
-ENV HTTP_PROXY=${HTTP_PROXY:-http://192.168.0.147:7890}
-ENV HTTPS_PROXY=${HTTPS_PROXY:-http://192.168.0.147:7890}
-ENV NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,.local}
+ENV HTTP_PROXY=$HTTP_PROXY
+ENV HTTPS_PROXY=$HTTPS_PROXY
+ENV NO_PROXY=$NO_PROXY
+ENV http_proxy=$HTTP_PROXY
+ENV https_proxy=$HTTPS_PROXY
 
 # 使用 root 用户安装插件
 USER root
@@ -21,17 +29,20 @@ RUN mkdir -p /home/node/.openclaw/extensions && \
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
 
-# 配置 npm 代理（使用环境变量）
+# 配置 npm 代理（在同一 RUN 命令中）
 WORKDIR /tmp/voice-agent-src
-RUN echo "Configuring npm proxy: $HTTP_PROXY" && \
-    npm config set proxy $HTTP_PROXY && \
-    npm config set https-proxy $HTTPS_PROXY && \
+RUN echo "=== npm proxy config ===" && \
+    echo "Using proxy: $HTTP_PROXY" && \
+    npm config set proxy "$HTTP_PROXY" && \
+    npm config set https-proxy "$HTTPS_PROXY" && \
     npm config set strict-ssl false && \
     npm config set registry https://registry.npmjs.org/ && \
+    echo "=== npm config list ===" && \
     npm config list
 
 # 安装插件依赖并编译（带详细日志）
 RUN echo "=== npm install start ===" && \
+    echo "Proxy: $HTTP_PROXY" && \
     npm install --omit=dev --loglevel verbose 2>&1 && \
     echo "=== npm build start ===" && \
     npm run build 2>&1 && \
@@ -48,8 +59,6 @@ WORKDIR /home/node
 # 设置运行时环境变量
 ENV ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
 ENV NODE_ENV=production
-ENV HTTP_PROXY=${HTTP_PROXY:-}
-ENV HTTPS_PROXY=${HTTPS_PROXY:-}
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
