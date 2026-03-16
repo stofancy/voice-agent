@@ -209,6 +209,39 @@ environment:
 
 ## 📝 交接说明
 
+## 📝 交接说明
+
+### 正确部署方式（2026-03-16 23:59 更新）
+
+**重要**：使用 OpenClaw 项目中的 `docker-compose.voice.yml` 统一部署！
+
+```bash
+# 1. 进入 OpenClaw 项目目录
+cd ~/workspaces/openclaw
+
+# 2. 复制环境变量
+cp .env.voice .env
+
+# 3. 确认百炼 API Key 正确
+vim .env
+
+# 4. 启动服务
+docker compose -f docker-compose.voice.yml up -d
+
+# 5. 验证
+docker compose -f docker-compose.voice.yml ps
+curl http://localhost:18789/healthz  # Gateway
+curl http://localhost:8765/         # Voice
+```
+
+**架构说明**:
+- Gateway 挂载 `~/.openclaw` 配置（官方方式）
+- Voice 使用环境变量，不挂载主机配置
+- 两个服务在同一 Docker network 中
+- Voice 通过 `http://openclaw-gateway:18789` 连接 Gateway
+
+**详细文档**: `DEPLOYMENT.md`
+
 ### 继续工作步骤
 
 1. **确认百炼 API Key**
