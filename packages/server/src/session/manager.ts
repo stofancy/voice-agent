@@ -1,5 +1,5 @@
 // 会话管理器
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import type { SessionInfo, SessionState } from '../types.js';
 
 export interface SessionManagerOptions {
@@ -25,7 +25,7 @@ export class SessionManager {
    * 创建新会话
    */
   createSession(userId?: string): SessionInfo {
-    const sessionId = uuidv4();
+    const sessionId = randomUUID();
     const now = Date.now();
     
     const session: SessionInfo = {
