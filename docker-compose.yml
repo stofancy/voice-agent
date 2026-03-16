@@ -1,6 +1,9 @@
 # OpenClaw Voice - Full Stack Docker Compose
 # Deploy Gateway + Voice together in the same network
 # 
+# IMPORTANT: Does NOT mount host ~/.openclaw config
+# Uses independent configuration for Gateway
+#
 # Usage:
 #   1. cp .env.example .env
 #   2. Edit .env with your Bailian API Key
@@ -10,8 +13,9 @@ name: openclaw-voice
 
 services:
   # ===========================================
-  # OpenClaw Gateway (Official Configuration)
-  # Reference: ~/workspaces/openclaw/docker-compose.yml
+  # OpenClaw Gateway (Independent Instance)
+  # Reference: Official docker-compose.yml pattern
+  # BUT uses independent config (NOT host ~/.openclaw)
   # ===========================================
   openclaw-gateway:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
@@ -25,10 +29,13 @@ services:
       ALI_BAILIAN_API_KEY: ${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
       # Default model
       OPENCLAW_DEFAULT_MODEL: ${OPENCLAW_DEFAULT_MODEL:-bailian/qwen3-coder-next}
+      # Allow unconfigured mode (no ~/.openclaw mount needed)
+      OPENCLAW_GATEWAY_ALLOW_UNCONFIGURED: "true"
+      # Control UI for non-loopback access
+      OPENCLAW_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK: "true"
     volumes:
-      # Mount host OpenClaw config (READ-ONLY for Gateway)
-      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
+      # Independent config volume - DOES NOT touch host ~/.openclaw
+      - openclaw-gateway-config:/home/node/.openclaw
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
@@ -39,6 +46,7 @@ services:
         "node",
         "dist/index.js",
         "gateway",
+        "--allow-unconfigured",
         "--bind",
         "${OPENCLAW_GATEWAY_BIND:-lan}",
         "--port",
@@ -55,13 +63,12 @@ services:
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 20s
+      start_period: 60s
     networks:
       - openclaw-voice-network
 
   # ===========================================
-  # OpenClaw CLI (Official Configuration)
-  # Shares network with Gateway for CLI access
+  # OpenClaw CLI (Shares network with Gateway)
   # ===========================================
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
@@ -77,9 +84,6 @@ services:
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
       BROWSER: echo
       TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
-    volumes:
-      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
-      - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
     stdin_open: true
     tty: true
     init: true
@@ -126,3 +130,7 @@ services:
 networks:
   openclaw-voice-network:
     driver: bridge
+
+volumes:
+  # Independent Gateway config volume - DOES NOT touch host ~/.openclaw
+  openclaw-gateway-config:
