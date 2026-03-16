@@ -54,7 +54,7 @@ fi
 echo "🚀 Starting services..."
 echo ""
 
-$COMPOSE_CMD -f docker-compose.full.yml up -d --build
+$COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice up -d --build
 
 echo ""
 echo "✅ Services started!"
@@ -70,4 +70,6 @@ echo "📋 Useful commands:"
 echo "  - View logs: $COMPOSE_CMD -f docker-compose.full.yml logs -f"
 echo "  - Stop: $COMPOSE_CMD -f docker-compose.full.yml down"
 echo "  - Restart: $COMPOSE_CMD -f docker-compose.full.yml restart"
+echo ""
+ -p openclaw-voice restart"
 echo ""

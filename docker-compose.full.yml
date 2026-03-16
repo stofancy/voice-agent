@@ -1,6 +1,8 @@
 # OpenClaw Voice - Full Stack Deployment (Gateway + Voice)
 # Based on official OpenClaw docker-compose.yml configuration
-# Usage: docker compose -f docker-compose.full.yml up -d
+# Usage: docker compose -f docker-compose.full.yml -p openclaw-voice up -d
+
+name: openclaw-voice
 
 services:
   # ===========================================
