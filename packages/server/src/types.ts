@@ -70,3 +70,30 @@ export interface SessionInfo {
   lastActivityAt: number;
   userId?: string;
 }
+
+// Plugin Configuration
+export interface VoiceAgentConfig {
+  enabled: boolean;
+  serve: {
+    port: number;
+    path: string;
+    bind: string;
+  };
+  bailian: {
+    apiKey: string;
+    sttModel: string;
+    ttsModel: string;
+    ttsVoice: string;
+  };
+  audio: {
+    inputSampleRate: number;
+    outputSampleRate: number;
+  };
+  session: {
+    maxDurationMs: number;
+    idleTimeoutMs: number;
+  };
+  security: {
+    pairingRequired: boolean;
+  };
+}
