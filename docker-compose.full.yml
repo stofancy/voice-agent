@@ -10,9 +10,12 @@ services:
     environment:
       - OPENCLAW_PORT=18789
       - OPENCLAW_HOST=0.0.0.0
-      - OPENCLAW_DEFAULT_MODEL=bailian/qwen-turbo
+      - OPENCLAW_DEFAULT_MODEL=bailian/qwen3-coder-next
     volumes:
-      - openclaw-gateway-data:/root/.openclaw
+      - type: bind
+        source: ./openclaw-gateway-config
+        target: /home/node/.openclaw
+        read_only: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18789/"]
