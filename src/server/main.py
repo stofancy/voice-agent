@@ -309,23 +309,41 @@ async def websocket_endpoint(websocket: WebSocket):
                                 })
                                 logger.debug(f"📝 Sent subtitle chunk: {chunk[:30]}...")
                             
-                            # Synthesize with Bailian TTS (streaming)
+                            # Synthesize with Bailian TTS (streaming with buffer)
                             logger.debug(f"🔊 Synthesizing response (streaming): {full_response[:50]}...")
                             
-                            # Stream TTS audio chunks
+                            # Stream TTS audio chunks with buffering
                             tts_start_time = asyncio.get_event_loop().time()
                             audio_chunks_sent = 0
+                            buffer = bytearray()
+                            BUFFER_SIZE = 4096  # 累积 4KB 再发送，减少卡顿
+                            
                             async for audio_chunk in tts.synthesize(full_response, stream=True):
-                                # Send each audio chunk immediately
-                                audio_b64 = base64.b64encode(audio_chunk).decode()
+                                buffer.extend(audio_chunk)
+                                
+                                # 当缓冲区足够大时发送
+                                if len(buffer) >= BUFFER_SIZE:
+                                    audio_b64 = base64.b64encode(bytes(buffer)).decode()
+                                    await websocket.send_json({
+                                        "type": "audio_chunk",
+                                        "data": audio_b64,
+                                        "sample_rate": 24000,
+                                    })
+                                    audio_chunks_sent += 1
+                                    chunk_time = asyncio.get_event_loop().time()
+                                    logger.debug(f"🔊 发送缓冲音频块 #{audio_chunks_sent}: {len(buffer)} bytes, 延迟 {(chunk_time - tts_start_time)*1000:.1f}ms")
+                                    buffer = bytearray()  # 清空缓冲区
+                            
+                            # 发送剩余数据
+                            if buffer:
+                                audio_b64 = base64.b64encode(bytes(buffer)).decode()
                                 await websocket.send_json({
                                     "type": "audio_chunk",
                                     "data": audio_b64,
                                     "sample_rate": 24000,
                                 })
                                 audio_chunks_sent += 1
-                                chunk_time = asyncio.get_event_loop().time()
-                                logger.debug(f"🔊 发送音频块 #{audio_chunks_sent}: {len(audio_chunk)} bytes, 延迟 {(chunk_time - tts_start_time)*1000:.1f}ms")
+                                logger.debug(f"🔊 发送最后音频块 #{audio_chunks_sent}: {len(buffer)} bytes")
                             
                             tts_total_time = asyncio.get_event_loop().time() - tts_start_time
                             logger.info(f"🔊 TTS 完成：{audio_chunks_sent} 块，总耗时 {tts_total_time*1000:.1f}ms")
