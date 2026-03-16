@@ -341,7 +341,7 @@ async def websocket_endpoint(websocket: WebSocket):
                                     })
                                     audio_chunks_sent += 1
                                     chunk_time = asyncio.get_event_loop().time()
-                                    logger.debug(f"🔊 发送缓冲音频块 #{audio_chunks_sent}: {len(buffer)} bytes, 总延迟 {(chunk_time - tts_start_time)*1000:.1f}ms (时间缓冲：{time_buffer_elapsed*1000:.1f}ms)")
+                                    logger.debug(f"🔊 发送缓冲音频块 #{audio_chunks_sent}: {len(buffer)} bytes, 总延迟 {(chunk_time - tts_start_time)*1000:.1f}ms (时间缓冲：{time_buffer_elapsed_ms:.1f}ms)")
                                     buffer = bytearray()  # 清空缓冲区
                                     buffer_start_time = asyncio.get_event_loop().time()  # 重置时间缓冲
                             
@@ -453,6 +453,22 @@ if __name__ == "__main__":
 
 
 # Serve static files for client
+client_dir = Path(__file__).parent.parent / "client"
+if client_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "src.server.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=True,
+    )
+ue,
+    )
+es for client
 client_dir = Path(__file__).parent.parent / "client"
 if client_dir.exists():
     app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
