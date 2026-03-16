@@ -6,16 +6,9 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     container_name: openclaw-gateway
     ports:
-      - "18789:18789"
+      - "12589:18789"
     environment:
-      - OPENCLAW_PORT=18789
-      - OPENCLAW_HOST=0.0.0.0
       - OPENCLAW_DEFAULT_MODEL=bailian/qwen3-coder-next
-    volumes:
-      - type: bind
-        source: ./openclaw-gateway-config
-        target: /home/node/.openclaw
-        read_only: true
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:18789/"]
