@@ -1,24 +1,28 @@
 #!/bin/bash
 # Start OpenClaw Voice (Full Stack: Gateway + Voice)
-# Self-contained deployment - does NOT touch host OpenClaw config
+# 
+# Usage: ./start.sh
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🦞 OpenClaw Voice - Self-Contained Deployment"
-echo "=============================================="
-echo ""
-echo "⚠️  This deployment is ISOLATED and does NOT use your host OpenClaw config."
+echo "🦞 OpenClaw Voice - Full Stack Deployment"
+echo "=========================================="
 echo ""
 
 # Check if .env exists
 if [ ! -f ".env" ]; then
-    echo "📝 Creating .env from .env.full..."
-    cp .env.full .env
+    echo "📝 Creating .env from .env.example..."
+    cp .env.example .env
     echo "✅ .env created. Please edit with your Bailian API Key."
     echo ""
+    echo "Edit .env and run again:"
+    echo "  vim .env"
+    echo "  ./start.sh"
+    echo ""
+    exit 1
 fi
 
 # Load environment variables
@@ -34,7 +38,7 @@ echo "  - Bailian API Key: ${ALI_BAILIAN_API_KEY:0:15}..."
 echo "  - STT Model: ${OPENCLAW_STT_MODEL:-qwen3-asr-flash}"
 echo "  - TTS Model: ${OPENCLAW_TTS_MODEL:-qwen3-tts-flash}"
 echo "  - TTS Voice: ${OPENCLAW_TTS_VOICE:-Cherry}"
-echo "  - Config Volume: openclaw-gateway-data (isolated)"
+echo "  - Config Mount: ${OPENCLAW_CONFIG_DIR:-~/.openclaw}"
 echo ""
 
 # Check if Docker is running
@@ -57,20 +61,21 @@ fi
 echo "🚀 Starting services..."
 echo ""
 
-$COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice up -d --build
+$COMPOSE_CMD up -d --build
 
 echo ""
 echo "✅ Services started!"
 echo ""
 echo "📊 Status:"
-$COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice ps
+$COMPOSE_CMD ps
 echo ""
 echo "🌐 Access:"
-echo "  - OpenClaw Control UI: http://localhost:${OPENCLAW_GATEWAY_PORT:-18789}/"
-echo "  - OpenClaw Voice UI: http://localhost:${OPENCLAW_VOICE_PORT:-8765}/"
+echo "  - OpenClaw Gateway: http://localhost:${OPENCLAW_GATEWAY_PORT:-18789}/"
+echo "  - OpenClaw Voice: http://localhost:${OPENCLAW_VOICE_PORT:-8765}/"
 echo ""
 echo "📋 Useful commands:"
-echo "  - View logs: $COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice logs -f"
-echo "  - Stop: $COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice down"
-echo "  - Restart: $COMPOSE_CMD -f docker-compose.full.yml -p openclaw-voice restart"
+echo "  - View logs: $COMPOSE_CMD logs -f"
+echo "  - Stop: $COMPOSE_CMD down"
+echo "  - Restart: $COMPOSE_CMD restart"
+echo "  - Status: $COMPOSE_CMD ps"
 echo ""
