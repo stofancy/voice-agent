@@ -34,7 +34,7 @@ services:
       - OPENCLAW_TTS_VOICE=${OPENCLAW_TTS_VOICE:-Cherry}
       - OPENCLAW_TTS_LANGUAGE=${OPENCLAW_TTS_LANGUAGE:-Chinese}
       # Gateway Connection (via host network)
-      - OPENCLAW_GATEWAY_URL=http://host.docker.internal:${OPENCLAW_GATEWAY_PORT:-26523}
+      - OPENCLAW_GATEWAY_URL=http://host.docker.internal:26523
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-REDACTED-openclaw-voice-token}
     ports:
       - "${OPENCLAW_VOICE_PORT:-8765}:8765"
