@@ -70,10 +70,19 @@ class BailianSTT:
             return "Mock: 语音识别服务未配置", False
         
         try:
+            # 重采样到 16kHz（如果前端不是 16kHz）
+            if sample_rate != 16000:
+                import librosa
+                audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=16000)
+                sample_rate = 16000
+                logger.debug(f"🔄 重采样到 16kHz (原始：{sample_rate}Hz)")
+            
             # 转换音频为 WAV 格式
             wav_data = self._numpy_to_wav(audio_data, sample_rate)
             base64_audio = base64.b64encode(wav_data).decode('utf-8')
             data_uri = f"data:audio/wav;base64,{base64_audio}"
+            
+            logger.debug(f"📤 发送 STT 请求，音频长度：{len(audio_data)} samples, {len(audio_data)/16000:.2f}s")
             
             # 调用百炼 API
             response = await self._client.chat.completions.create(
@@ -100,11 +109,11 @@ class BailianSTT:
             )
             
             text = response.choices[0].message.content
-            logger.debug(f"🎤 STT 识别结果：{text}")
+            logger.info(f"🎤 STT 识别结果：{text}")
             return text, True
             
         except Exception as e:
-            logger.error(f"❌ STT 识别失败：{e}")
+            logger.error(f"❌ STT 识别失败：{type(e).__name__}: {e}")
             return f"识别失败：{str(e)}", False
     
     def _numpy_to_wav(

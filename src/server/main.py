@@ -77,8 +77,8 @@ settings = Settings()
 app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
 # Global instances (initialized on startup)
-stt: Optional[WhisperSTT] = None
-tts: Optional[ChatterboxTTS] = None
+stt: Optional[BailianSTT] = None
+tts: Optional[BailianTTS] = None
 backend: Optional[AIBackend] = None
 vad: Optional[VoiceActivityDetector] = None
 
@@ -114,18 +114,16 @@ async def startup():
         language_type=settings.tts_language,
     )
     
-    # Initialize AI backend
-    # Auto-detect OpenClaw gateway
-    gateway_url = settings.openclaw_gateway_url or os.getenv("OPENCLAW_GATEWAY_URL")
-    gateway_token = settings.openclaw_gateway_token or os.getenv("OPENCLAW_GATEWAY_TOKEN")
+    # Initialize AI backend - Connect to OpenClaw Gateway
+    gateway_url = os.getenv("OPENCLAW_GATEWAY_URL")
+    gateway_token = os.getenv("OPENCLAW_GATEWAY_TOKEN")
     
     if gateway_url and gateway_token:
-        # Use OpenClaw gateway (connects to Aria!)
-        logger.info(f"🦞 Connecting to OpenClaw gateway: {gateway_url}")
+        logger.info(f"🦞 Connecting to OpenClaw Gateway: {gateway_url}")
         backend = AIBackend(
-            backend_type="openai",  # Gateway speaks OpenAI API
+            backend_type="openai",
             url=f"{gateway_url}/v1",
-            model="openclaw:voice",  # Maps to 'voice' agent in config
+            model="openclaw:main",
             api_key=gateway_token,
             system_prompt=(
                 "This conversation is happening via real-time voice chat. "
@@ -135,13 +133,13 @@ async def startup():
             ),
         )
     else:
-        # Fallback to direct OpenAI
-        logger.info(f"Connecting to backend: {settings.backend_type}")
+        # Fallback to Bailian directly
+        logger.info("🔌 No Gateway configured - Using Bailian API directly")
         backend = AIBackend(
-            backend_type=settings.backend_type,
-            url=settings.backend_url,
-            model=settings.backend_model,
-            api_key=settings.openai_api_key or os.getenv("OPENAI_API_KEY"),
+            backend_type="openai",
+            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            model="qwen-turbo",
+            api_key=os.getenv("ALI_BAILIAN_API_KEY"),
         )
     
     # Initialize VAD
@@ -263,6 +261,9 @@ async def websocket_endpoint(websocket: WebSocket):
             data = await websocket.receive_text()
             msg = json.loads(data)
             
+            # Debug: log all message types
+            logger.debug(f"📨 Received: {msg.get('type', 'unknown')}")
+            
             if msg["type"] == "start_listening":
                 is_listening = True
                 audio_buffer = []
@@ -326,10 +327,16 @@ async def websocket_endpoint(websocket: WebSocket):
                             logger.info(f"✅ Response complete: {full_response[:100]}...")
                             
                         except Exception as e:
-                            logger.error(f"AI/TTS error: {e}")
+                            logger.error(f"AI/TTS error: {type(e).__name__}: {e}")
+                            # Send fallback response
+                            fallback = "Sorry, I had trouble processing that. Could you try again?"
                             await websocket.send_json({
-                                "type": "error",
-                                "message": str(e),
+                                "type": "response_chunk",
+                                "text": fallback,
+                            })
+                            await websocket.send_json({
+                                "type": "response_complete",
+                                "text": fallback,
                             })
                 
                 audio_buffer = []
@@ -341,6 +348,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 audio_bytes = base64.b64decode(msg["data"])
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
                 audio_buffer.append(audio_np)
+                logger.debug(f"📥 Audio chunk: {len(audio_np)} samples, buffer now: {len(audio_buffer)} chunks, total: {sum(len(c) for c in audio_buffer)} samples")
                 
                 # VAD check - notify client if speech detected
                 if vad and len(audio_np) > 0:
