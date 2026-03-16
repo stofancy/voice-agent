@@ -289,20 +289,18 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.info(f"🎤 Transcript: {transcript}")
                     
                     if transcript.strip() and success:
-                        # Get AI response (streaming)
-                        logger.debug("Getting AI response (streaming)...")
+                        # Get AI response
+                        logger.debug("Getting AI response...")
                         
                         try:
-                            # Stream AI response sentence-by-sentence
-                            full_response = ""
-                            async for chunk in backend.chat_stream(transcript):
-                                full_response += chunk
-                                # Send subtitle chunk in real-time
-                                await websocket.send_json({
-                                    "type": "subtitle_chunk",
-                                    "text": chunk,
-                                })
-                                logger.debug(f"📝 Sent subtitle chunk: {chunk[:30]}...")
+                            # Simple non-streaming for now
+                            response = await backend.chat(transcript)
+                            full_response = response or "抱歉，未能生成回复"
+                            
+                            await websocket.send_json({
+                                "type": "response_chunk",
+                                "text": full_response,
+                            })
                             
                             # Synthesize with Bailian TTS
                             logger.debug(f"🔊 Synthesizing response: {full_response[:50]}...")
