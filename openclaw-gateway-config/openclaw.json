@@ -1,0 +1,62 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.3.13"
+  },
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "token",
+      "token": "YOUR_GATEWAY_TOKEN"
+    }
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "bailian": {
+        "baseUrl": "https://coding.dashscope.aliyuncs.com/v1",
+        "apiKey": "YOUR_BAILIAN_API_KEY",
+        "api": "openai-completions",
+        "models": [
+          {
+            "id": "qwen3.5-plus",
+            "name": "qwen3.5-plus",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 1000000,
+            "maxTokens": 65536
+          },
+          {
+            "id": "qwen-turbo",
+            "name": "qwen-turbo",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 32000,
+            "maxTokens": 6000
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "bailian/qwen-turbo"
+      },
+      "workspace": "/app/workspace"
+    },
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Voice Assistant",
+        "workspace": "/app/workspace",
+        "model": "bailian/qwen-turbo"
+      }
+    ]
+  },
+  "tools": {
+    "profile": "minimal"
+  }
+}
