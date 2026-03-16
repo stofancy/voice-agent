@@ -112,29 +112,41 @@ class BailianTTS:
                     # 流式处理 SSE
                     logger.debug("🔊 TTS 流式模式：开始接收 SSE 数据")
                     audio_chunk_count = 0
+                    first_chunk_time = None
+                    total_bytes = 0
                     async for line in response.content:
+                        line_received_at = asyncio.get_event_loop().time()
                         line = line.decode('utf-8').strip()
-                        logger.debug(f"🔊 TTS 收到原始数据：{line[:100]}...")
                         if line.startswith('data:'):
                             data = line[5:].strip()
-                            logger.debug(f"🔊 TTS 解析 data: {data[:100]}...")
                             if data and data != '[DONE]':
                                 try:
                                     import json
                                     chunk = json.loads(data)
-                                    logger.debug(f"🔊 TTS JSON: {chunk.keys() if isinstance(chunk, dict) else 'not dict'}")
                                     if 'output' in chunk and 'audio' in chunk['output']:
                                         audio_data = chunk['output']['audio'].get('data', '')
                                         if audio_data:
                                             audio_chunk_count += 1
-                                            logger.debug(f"🔊 TTS 收到音频块 #{audio_chunk_count}: {len(audio_data)} bytes")
-                                            yield base64.b64decode(audio_data)
+                                            decoded_audio = base64.b64decode(audio_data)
+                                            total_bytes += len(decoded_audio)
+                                            
+                                            # 记录第一个音频块的时间
+                                            if first_chunk_time is None:
+                                                first_chunk_time = line_received_at
+                                                logger.info(f"🔊 TTS 首块延迟：{(line_received_at - start_time)*1000:.1f}ms")
+                                            
+                                            # 记录每个音频块的详细信息
+                                            logger.debug(f"🔊 TTS 音频块 #{audio_chunk_count}: {len(decoded_audio)} bytes, 延迟 {(line_received_at - start_time)*1000:.1f}ms")
+                                            
+                                            yield decoded_audio
                                     else:
-                                        logger.warning(f"🔊 TTS 响应格式异常：{chunk}")
+                                        logger.warning(f"🔊 TTS 响应格式异常：缺少 audio 字段")
                                 except json.JSONDecodeError as e:
-                                    logger.error(f"🔊 TTS JSON 解析失败：{e}, data: {data}")
+                                    logger.error(f"🔊 TTS JSON 解析失败：{e}")
                                     continue
-                    logger.debug(f"🔊 TTS 流式完成：共收到 {audio_chunk_count} 个音频块")
+                    
+                    total_time = asyncio.get_event_loop().time() - start_time
+                    logger.info(f"🔊 TTS 流式完成：{audio_chunk_count} 块，{total_bytes} bytes, 总耗时 {total_time*1000:.1f}ms, 平均 {(total_time/audio_chunk_count)*1000:.1f}ms/块")
                 else:
                     # 非流式：获取完整音频 URL
                     result = await response.json()

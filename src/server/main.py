@@ -313,6 +313,8 @@ async def websocket_endpoint(websocket: WebSocket):
                             logger.debug(f"🔊 Synthesizing response (streaming): {full_response[:50]}...")
                             
                             # Stream TTS audio chunks
+                            tts_start_time = asyncio.get_event_loop().time()
+                            audio_chunks_sent = 0
                             async for audio_chunk in tts.synthesize(full_response, stream=True):
                                 # Send each audio chunk immediately
                                 audio_b64 = base64.b64encode(audio_chunk).decode()
@@ -321,6 +323,12 @@ async def websocket_endpoint(websocket: WebSocket):
                                     "data": audio_b64,
                                     "sample_rate": 24000,
                                 })
+                                audio_chunks_sent += 1
+                                chunk_time = asyncio.get_event_loop().time()
+                                logger.debug(f"🔊 发送音频块 #{audio_chunks_sent}: {len(audio_chunk)} bytes, 延迟 {(chunk_time - tts_start_time)*1000:.1f}ms")
+                            
+                            tts_total_time = asyncio.get_event_loop().time() - tts_start_time
+                            logger.info(f"🔊 TTS 完成：{audio_chunks_sent} 块，总耗时 {tts_total_time*1000:.1f}ms")
                             
                             await websocket.send_json({
                                 "type": "response_complete",
