@@ -1,6 +1,7 @@
 #!/bin/bash
-# Start OpenClaw Voice (Full Stack: Gateway + Voice)
-# 
+# Start OpenClaw Voice
+# Prerequisites: Official OpenClaw Gateway must be running first
+#
 # Usage: ./start.sh
 
 set -e
@@ -8,8 +9,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo "🦞 OpenClaw Voice - Full Stack Deployment"
-echo "=========================================="
+echo "🦞 OpenClaw Voice - Join Official Gateway Network"
+echo "================================================="
 echo ""
 
 # Check if .env exists
@@ -31,14 +32,13 @@ source .env
 set +a
 
 echo "📋 Configuration:"
-echo "  - Gateway Port: ${OPENCLAW_GATEWAY_PORT:-18789}"
+echo "  - Gateway Port: ${OPENCLAW_GATEWAY_PORT:-26523}"
 echo "  - Voice Port: ${OPENCLAW_VOICE_PORT:-8765}"
-echo "  - Gateway Bind: ${OPENCLAW_GATEWAY_BIND:-lan}"
 echo "  - Bailian API Key: ${ALI_BAILIAN_API_KEY:0:15}..."
 echo "  - STT Model: ${OPENCLAW_STT_MODEL:-qwen3-asr-flash}"
 echo "  - TTS Model: ${OPENCLAW_TTS_MODEL:-qwen3-tts-flash}"
 echo "  - TTS Voice: ${OPENCLAW_TTS_VOICE:-Cherry}"
-echo "  - Config Mount: ${OPENCLAW_CONFIG_DIR:-~/.openclaw}"
+echo "  - Network: ${OPENCLAW_NETWORK_NAME:-openclaw_default}"
 echo ""
 
 # Check if Docker is running
@@ -46,6 +46,21 @@ if ! docker info &>/dev/null; then
     echo "❌ Docker is not running. Please start Docker first."
     exit 1
 fi
+
+# Check if Gateway is running
+echo "🔍 Checking Gateway availability..."
+if ! wget -q --spider "http://localhost:${OPENCLAW_GATEWAY_PORT:-26523}/healthz" 2>/dev/null; then
+    echo "❌ Gateway is not running at localhost:${OPENCLAW_GATEWAY_PORT:-26523}"
+    echo ""
+    echo "Please start the official Gateway first:"
+    echo "  cd ~/workspaces/openclaw"
+    echo "  docker compose up -d openclaw-gateway"
+    echo "  docker compose run --rm openclaw-cli onboard"
+    echo ""
+    exit 1
+fi
+echo "✅ Gateway is running!"
+echo ""
 
 # Use docker compose (v2) or docker-compose (v1)
 if docker compose version &>/dev/null; then
@@ -58,19 +73,19 @@ else
 fi
 
 # Build and start
-echo "🚀 Starting services..."
+echo "🚀 Starting Voice service..."
 echo ""
 
 $COMPOSE_CMD up -d --build
 
 echo ""
-echo "✅ Services started!"
+echo "✅ Voice service started!"
 echo ""
 echo "📊 Status:"
 $COMPOSE_CMD ps
 echo ""
 echo "🌐 Access:"
-echo "  - OpenClaw Gateway: http://localhost:${OPENCLAW_GATEWAY_PORT:-18789}/"
+echo "  - OpenClaw Gateway: http://localhost:${OPENCLAW_GATEWAY_PORT:-26523}/"
 echo "  - OpenClaw Voice: http://localhost:${OPENCLAW_VOICE_PORT:-8765}/"
 echo ""
 echo "📋 Useful commands:"
