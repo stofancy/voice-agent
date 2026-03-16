@@ -180,16 +180,32 @@ export function createVoiceAgentDispatcher(
         // Update status to "speaking"
         sendStatus('speaking');
         
-        // Synthesize audio
-        const ttsResult = await ttsClient.synthesize(text);
-        
-        if (!ttsResult.audioData) {
-          throw new Error('TTS returned no audio data');
+        try {
+          // Synthesize audio
+          const ttsResult = await ttsClient.synthesize(text);
+          
+          if (!ttsResult.audioData) {
+            throw new Error('TTS returned no audio data');
+          }
+          
+          // Send audio to browser
+          sendAudio(ttsResult.audioData, !final);
+          console.log(`[dispatcher] Sent audio to browser (size=${ttsResult.audioData.length} bytes)`);
+        } catch (ttsError) {
+          // TTS 失败降级：只发送文本，不播放音频
+          console.error(`[dispatcher] TTS failed, falling back to text only: ${ttsError}`);
+          
+          // 发送错误通知但不中断流程
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: {
+                code: 'TTS_FALLBACK',
+                message: 'TTS failed, showing text only',
+              },
+            }));
+          }
         }
-        
-        // Send audio to browser
-        sendAudio(ttsResult.audioData, !final);
-        console.log(`[dispatcher] Sent audio to browser (size=${ttsResult.audioData.length} bytes)`);
       }
       
       // Step 3: Mark as complete if this is the final chunk
