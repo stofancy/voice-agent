@@ -1,12 +1,16 @@
 # Voice Agent Plugin - Custom OpenClaw Image
 FROM ghcr.io/openclaw/openclaw:latest
 
+# 使用 root 用户安装插件
+USER root
+
 # 设置环境变量
 ENV ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
 ENV NODE_ENV=production
 
 # 创建插件目录
-RUN mkdir -p /home/node/.openclaw/extensions
+RUN mkdir -p /home/node/.openclaw/extensions && \
+    mkdir -p /tmp/voice-agent-src
 
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
@@ -16,6 +20,7 @@ WORKDIR /tmp/voice-agent-src
 RUN npm install --omit=dev && \
     npm run build && \
     cp -r /tmp/voice-agent-src /home/node/.openclaw/extensions/voice-agent && \
+    chown -R node:node /home/node/.openclaw/extensions/voice-agent && \
     rm -rf /tmp/voice-agent-src
 
 # 切换回 node 用户
