@@ -1,0 +1,34 @@
+{
+  "meta": {"lastTouchedVersion": "2026.3.13"},
+  "gateway": {
+    "port": 18789,
+    "mode": "local",
+    "bind": "lan",
+    "auth": {"mode": "token", "token": "REDACTED-openclaw-voice-token"},
+    "http": {"endpoints": {"chatCompletions": {"enabled": true}}}
+  },
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "bailian": {
+        "baseUrl": "https://coding.dashscope.aliyuncs.com/v1",
+        "apiKey": "REDACTED-gateway-provider-key",
+        "api": "openai-completions",
+        "models": [
+          {"id": "qwen3-coder-next", "name": "qwen3-coder-next", "reasoning": false, "input": ["text"], "contextWindow": 262144, "maxTokens": 65536},
+          {"id": "qwen3.5-plus", "name": "qwen3.5-plus", "reasoning": false, "input": ["text", "image"], "contextWindow": 1000000, "maxTokens": 65536},
+          {"id": "MiniMax-M2.5", "name": "MiniMax-M2.5", "reasoning": true, "input": ["text"], "contextWindow": 204800, "maxTokens": 131072},
+          {"id": "kimi-k2.5", "name": "kimi-k2.5", "reasoning": true, "input": ["text", "image"], "contextWindow": 262144, "maxTokens": 32768}
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {"model": {"primary": "bailian/qwen3-coder-next"}},
+    "list": [
+      {"id": "main", "default": true, "name": "Voice Assistant", "model": "bailian/qwen3-coder-next"},
+      {"id": "voice", "name": "Voice Agent", "model": "bailian/qwen3-coder-next"}
+    ]
+  },
+  "tools": {"profile": "minimal"}
+}
