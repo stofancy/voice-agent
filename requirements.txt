@@ -29,6 +29,7 @@ silero-vad>=4.0.0
 # AI Backend
 openai>=1.6.0
 httpx>=0.26.0
+aiohttp>=3.9.0  # For Bailian TTS
 
 # Utilities
 pyyaml>=6.0.1
