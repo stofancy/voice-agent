@@ -1,5 +1,5 @@
 // 录音 Hook - MediaRecorder API 封装
-import { useRef, useCallback, useEffect } from 'react';
+import { useRef, useCallback, useEffect, useState } from 'react';
 
 export interface UseRecorderOptions {
   onAudioData?: (base64: string, isFinal: boolean) => void;
@@ -12,6 +12,9 @@ export function useRecorder(options: UseRecorderOptions = {}) {
   const audioContextRef = useRef<AudioContext | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  
+  // 使用 useState 来追踪录音状态，触发重新渲染
+  const [isRecording, setIsRecording] = useState(false);
 
   const {
     onAudioData,
@@ -32,7 +35,15 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
   // 开始录音
   const startRecording = useCallback(async (): Promise<void> => {
+    // 防止重复开始
+    if (isRecording) {
+      console.log('[Recorder] Already recording, skipping start');
+      return;
+    }
+    
     try {
+      console.log('[Recorder] Starting recording...');
+      
       // 请求麦克风权限
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -62,38 +73,56 @@ export function useRecorder(options: UseRecorderOptions = {}) {
 
       // 录音停止时
       mediaRecorder.onstop = async () => {
+        console.log('[Recorder] Processing audio...');
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' });
+        console.log(`[Recorder] Blob size: ${blob.size} bytes`);
         
         // 转换为 PCM 16kHz 16bit
-        const pcmData = await blobToPCM(blob, sampleRate);
-        const base64 = arrayBufferToBase64(pcmData);
+        try {
+          const pcmData = await blobToPCM(blob, sampleRate);
+          const base64 = arrayBufferToBase64(pcmData);
+          console.log(`[Recorder] PCM data length: ${pcmData.byteLength} bytes`);
 
-        if (onAudioData) {
-          onAudioData(base64, true); // isFinal=true
+          if (onAudioData) {
+            onAudioData(base64, true); // isFinal=true
+            console.log('[Recorder] Audio sent to WebSocket');
+          }
+        } catch (error) {
+          console.error('[Recorder] Failed to process audio:', error);
+          if (onError && error instanceof Error) {
+            onError(error);
+          }
         }
 
         // 清理
         stream.getTracks().forEach(track => track.stop());
         streamRef.current = null;
+        setIsRecording(false);
       };
 
       // 开始录音
       mediaRecorder.start(1000); // 每秒触发一次 dataavailable
+      setIsRecording(true);
       console.log('[Recorder] Recording started');
     } catch (error) {
       console.error('[Recorder] Failed to start recording:', error);
+      setIsRecording(false);
       if (onError && error instanceof Error) {
         onError(error);
       }
       throw error;
     }
-  }, [sampleRate, onAudioData, onError]);
+  }, [sampleRate, onAudioData, onError, isRecording]);
 
   // 停止录音
   const stopRecording = useCallback((): void => {
+    console.log(`[Recorder] stopRecording called, mediaRecorder state: ${mediaRecorderRef.current?.state}`);
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       console.log('[Recorder] Recording stopped');
+    } else {
+      console.log('[Recorder] Not recording, nothing to stop');
+      setIsRecording(false);
     }
   }, []);
 
@@ -109,6 +138,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
         streamRef.current = null;
       }
 
+      setIsRecording(false);
       console.log('[Recorder] Recording cancelled');
     }
   }, []);
@@ -117,7 +147,7 @@ export function useRecorder(options: UseRecorderOptions = {}) {
     startRecording,
     stopRecording,
     cancelRecording,
-    isRecording: mediaRecorderRef.current?.state === 'recording',
+    isRecording,
   };
 }
 
@@ -139,6 +169,7 @@ async function blobToPCM(blob: Blob, targetSampleRate: number): Promise<ArrayBuf
     pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
   }
 
+  await audioContext.close();
   return pcmData.buffer;
 }
 

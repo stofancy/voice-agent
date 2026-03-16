@@ -49,7 +49,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
       const ws = new WebSocket(url);
 
       ws.onopen = () => {
-        set({ connectionState: 'connected' });
+        set({ connectionState: 'connected', error: null }); // 清除错误
         console.log('[WebSocket] Connected');
       };
 
