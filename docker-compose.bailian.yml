@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # OpenClaw Voice - Bailian Edition (CPU version)
   openclaw-voice-bailian:
     build:
       context: .
@@ -9,46 +8,10 @@ services:
     ports:
       - "8765:8765"
     environment:
-      # Server
-      - OPENCLAW_HOST=0.0.0.0
-      - OPENCLAW_PORT=8765
-      
-      # Bailian API (required)
-      - OPENCLAW_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
-      
-      # STT Configuration
+      - ALI_BAILIAN_API_KEY=YOUR_BAILIAN_API_KEY
       - OPENCLAW_STT_MODEL=qwen3-asr-flash
       - OPENCLAW_STT_LANGUAGE=zh
-      
-      # TTS Configuration
       - OPENCLAW_TTS_MODEL=qwen3-tts-flash
       - OPENCLAW_TTS_VOICE=Cherry
       - OPENCLAW_TTS_LANGUAGE=Chinese
-      
-      # OpenClaw Gateway Connection (optional, for full agent features)
-      - OPENCLAW_GATEWAY_URL=${OPENCLAW_GATEWAY_URL:-http://host.docker.internal:7777}
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-e10b3c7ca70ebef49b27040a1cd6219f59e7a445d4795ee2}
-      
-      # Auth (disable for testing)
-      - OPENCLAW_REQUIRE_AUTH=false
-    
-    volumes:
-      # Persist logs
-      - ./logs:/app/logs
-      # Persist any downloaded models/cache
-      - bailian-cache:/root/.cache
-    
-    extra_hosts:
-      # Allow container to access host services (Gateway, etc.)
-      - "host.docker.internal:host-gateway"
-    
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8765/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-
-volumes:
-  bailian-cache:
