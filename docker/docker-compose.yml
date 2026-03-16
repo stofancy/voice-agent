@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  voice-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
+    image: voice-agent-plugin:latest
+    container_name: voice-agent-plugin
+    environment:
+      - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
+      - NODE_ENV=production
+    ports:
+      - "${WEBUI_PORT:-5182}:5173"
+      - "${WS_PORT:-8774}:8765"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:18789/__openclaw__/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - voice-agent-network
+    volumes:
+      # 持久化 OpenClaw 配置
+      - voice-agent-data:/home/node/.openclaw
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  voice-agent-network:
+    driver: bridge
+
+volumes:
+  voice-agent-data:
+    driver: local
