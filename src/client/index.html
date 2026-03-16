@@ -393,10 +393,15 @@
                     addTranscript('AI', msg.text, 'assistant');
                     break;
                 case 'response_chunk':
-                    // Streaming text chunk
+                    // Streaming text chunk (legacy, full response at once)
                     streamingText += msg.text;
                     updateStreamingTranscript(streamingText);
                     setStatus('Speaking...', true);
+                    break;
+                case 'subtitle_chunk':
+                    // Real-time streaming subtitle chunk
+                    streamingText += msg.text;
+                    updateStreamingTranscript(streamingText);
                     break;
                 case 'audio_chunk':
                     // Queue audio chunk for playback
