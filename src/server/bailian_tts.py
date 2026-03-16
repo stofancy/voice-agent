@@ -110,20 +110,31 @@ class BailianTTS:
                 
                 if stream:
                     # 流式处理 SSE
+                    logger.debug("🔊 TTS 流式模式：开始接收 SSE 数据")
+                    audio_chunk_count = 0
                     async for line in response.content:
                         line = line.decode('utf-8').strip()
+                        logger.debug(f"🔊 TTS 收到原始数据：{line[:100]}...")
                         if line.startswith('data:'):
                             data = line[5:].strip()
+                            logger.debug(f"🔊 TTS 解析 data: {data[:100]}...")
                             if data and data != '[DONE]':
                                 try:
                                     import json
                                     chunk = json.loads(data)
+                                    logger.debug(f"🔊 TTS JSON: {chunk.keys() if isinstance(chunk, dict) else 'not dict'}")
                                     if 'output' in chunk and 'audio' in chunk['output']:
                                         audio_data = chunk['output']['audio'].get('data', '')
                                         if audio_data:
+                                            audio_chunk_count += 1
+                                            logger.debug(f"🔊 TTS 收到音频块 #{audio_chunk_count}: {len(audio_data)} bytes")
                                             yield base64.b64decode(audio_data)
-                                except json.JSONDecodeError:
+                                    else:
+                                        logger.warning(f"🔊 TTS 响应格式异常：{chunk}")
+                                except json.JSONDecodeError as e:
+                                    logger.error(f"🔊 TTS JSON 解析失败：{e}, data: {data}")
                                     continue
+                    logger.debug(f"🔊 TTS 流式完成：共收到 {audio_chunk_count} 个音频块")
                 else:
                     # 非流式：获取完整音频 URL
                     result = await response.json()
