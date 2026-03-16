@@ -1,8 +1,8 @@
 # OpenClaw Voice 项目交接文档
 
-**创建时间**: 2026-03-16 23:47
-**最后更新**: 2026-03-16 23:47
-**状态**: 暂停（等待终止机制研究完成）
+**创建时间**: 2026-03-16 23:59
+**最后更新**: 2026-03-17 00:02
+**状态**: 配置已完成，等待部署测试
 
 ---
 
@@ -13,18 +13,29 @@
 **架构**:
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  Docker Compose (project: openclaw-voice)               │
+│  ~/workspaces/openclaw-voice/                            │
+│                                                         │
+│  docker-compose.yml (借鉴官方配置)                        │
+│  + .env (环境变量)                                       │
 │                                                         │
 │  ┌────────────────────┐    ┌───────────────────────┐   │
 │  │ OpenClaw Gateway   │◄──►│  OpenClaw Voice       │   │
 │  │ (Port: 18789)      │    │  (Port: 8765)         │   │
 │  │                    │    │                       │   │
-│  │ - 独立实例         │    │  - STT: 百炼          │   │
-│  │ - 不触碰主机配置   │    │  - TTS: 百炼          │   │
-│  │ - volume 隔离      │    │  - LLM: → Gateway     │   │
-│  └────────────────────┘    └───────────────────────┘   │
+│  │ 挂载：~/.openclaw  │    │  无挂载（环境变量）    │   │
+│  │ 配置：openclaw.json│    │  STT: 百炼            │   │
+│  └────────────────────┘    │  TTS: 百炼            │   │
+│                            │  LLM: → Gateway       │   │
+│                            └───────────────────────┘   │
 └─────────────────────────────────────────────────────────┘
 ```
+
+**重要原则**:
+- ✅ 在 `openclaw-voice` 项目中工作
+- ✅ 借鉴官方 openclaw 配置方式
+- ✅ **不修改**官方 `~/workspaces/openclaw/` 仓库
+- ✅ Gateway 挂载 `~/.openclaw` 配置（只读）
+- ✅ Voice 使用环境变量，构建自本地源码
 
 ---
 
@@ -49,63 +60,54 @@
   - 支持 Gateway 连接
   - WebSocket 消息处理
 
-### 3. Docker 部署配置
-- ✅ `docker-compose.full.yml` - 完整部署配置
-  - 借鉴官方 OpenClaw docker-compose.yml
+### 3. Docker 部署配置（借鉴官方）
+- ✅ `docker-compose.yml` - 完整部署配置
+  - 借鉴官方 `~/workspaces/openclaw/docker-compose.yml`
   - 添加 `name: openclaw-voice` 避免服务名冲突
-  - 使用独立 volume（不挂载主机配置）
-  - Gateway 命令：`node openclaw.mjs gateway --allow-unconfigured`
-- ✅ `.env.full` - 环境变量模板
+  - Gateway 挂载 `~/.openclaw` 配置
+  - Voice 构建自本地源码
+- ✅ `.env.example` - 环境变量模板
   - 百炼 API Key 配置
   - 端口配置
   - 模型配置
-- ✅ `start-full.sh` - 一键启动脚本
+- ✅ `start.sh` - 一键启动脚本
   - 自动创建 .env
   - 显示配置信息
   - 健康检查
 
-### 4. 配置修复
-- ✅ 移除所有 `~/.openclaw` 配置挂载（违背原则）
-- ✅ 使用独立 Docker volume（`openclaw-gateway-data`）
-- ✅ 修正 Gateway 命令（`dist/index.js` → `openclaw.mjs`）
-- ✅ 添加 `--allow-unconfigured` 参数
-- ✅ 增加健康检查宽限期（20s → 60s）
-
-### 5. 代码提交
-- ✅ 7 次 Git 提交
+### 4. 代码提交
+- ✅ 15 次 Git 提交
   - `99878de` - 集成 OpenClaw Gateway 与百炼 STT/TTS
   - `022405e` - 添加 project name 避免冲突
-  - `2bfe9cf` - 完全隔离部署
-  - `7643249` - 添加待办事项
+  - `2bfe9cf` - 完全隔离部署（已废弃）
+  - `5f46cba` - 创建正确的 docker-compose 配置（当前）
   - 其他修复提交
 
-### 6. 问题记录
-- ✅ 记录所有遇到的问题和解决方案
-- ✅ 更新 `memory/2026-03-16.md`
-- ✅ 创建 `TODOS.md` 待办事项列表
+### 5. 文档
+- ✅ `HANDOVER.md` - 交接文档
+- ✅ `TODOS.md` - 待办事项列表
+- ✅ `README.bailian.md` - 百炼 API 集成说明
 
 ---
 
 ## ❌ 未完成工作
 
-### 1. Gateway 启动问题 🔴 阻塞中
-**状态**: Gateway 无法启动（exit 137）
+### 1. 部署测试 ⏳ 待执行
+**状态**: 配置已完成，等待部署测试
 
-**已尝试方案**:
-- 修正 Gateway 命令
-- 添加 `--allow-unconfigured` 参数
-- 增加健康检查宽限期
-- 检查内存（充足：15GB）
+**步骤**:
+```bash
+cd ~/workspaces/openclaw-voice
+cp .env.example .env
+vim .env  # 确认百炼 API Key
+./start.sh
+```
 
-**可能原因**:
-- Gateway 初始化超时
-- 镜像问题
-- 配置问题
-
-**下一步**:
-- 需要更多日志分析
-- 可能需要调整 Gateway 配置
-- 或测试简化启动方式
+**验证**:
+```bash
+curl http://localhost:18789/healthz  # Gateway
+curl http://localhost:8765/         # Voice
+```
 
 ### 2. 百炼 API Key 验证 ⏳ 待确认
 **状态**: 主公提到已修正 API Key
@@ -128,14 +130,12 @@
 
 ## 📁 文件清单
 
-### 核心文件
+### 核心配置文件
 | 文件 | 说明 | 状态 |
 |------|------|------|
-| `docker-compose.full.yml` | Docker Compose 配置 | ✅ 完成 |
-| `.env.full` | 环境变量模板 | ✅ 完成 |
-| `start-full.sh` | 启动脚本 | ✅ 完成 |
-| `TODOS.md` | 待办事项列表 | ✅ 完成 |
-| `README.bailian.md` | 使用文档 | ⚠️ 需更新 |
+| `docker-compose.yml` | Docker Compose 配置 | ✅ 完成 |
+| `.env.example` | 环境变量模板 | ✅ 完成 |
+| `start.sh` | 启动脚本 | ✅ 完成 |
 
 ### 代码文件
 | 文件 | 说明 | 状态 |
@@ -146,38 +146,46 @@
 | `src/server/backend.py` | AI 后端 | ✅ 完成 |
 | `Dockerfile.bailian` | Docker 镜像 | ✅ 完成 |
 
-### 配置文件
+### 文档文件
 | 文件 | 说明 | 状态 |
 |------|------|------|
-| `requirements.txt` | Python 依赖 | ✅ 完成 |
-| `.env` | 环境变量（运行时） | ⚠️ 需主公确认 |
+| `HANDOVER.md` | 交接文档 | ✅ 完成 |
+| `TODOS.md` | 待办事项 | ✅ 完成 |
+| `README.bailian.md` | 百炼 API 说明 | ✅ 完成 |
 
 ---
 
 ## 🔧 技术细节
 
-### Gateway 配置
+### Gateway 配置（借鉴官方）
 ```yaml
-command:
-  - "node"
-  - "openclaw.mjs"
-  - "gateway"
-  - "--allow-unconfigured"
-  - "--bind"
-  - "lan"
-  - "--port"
-  - "18789"
+openclaw-gateway:
+  image: ghcr.io/openclaw/openclaw:latest
+  volumes:
+    - ~/.openclaw:/home/node/.openclaw
+    - ~/.openclaw/workspace:/home/node/.openclaw/workspace
+  command:
+    - node
+    - dist/index.js
+    - gateway
+    - --bind
+    - lan
+    - --port
+    - 18789
 ```
 
 ### Voice 配置
 ```yaml
-environment:
-  - ALI_BAILIAN_API_KEY=sk-your-api-key-here
-  - OPENCLAW_STT_MODEL=qwen3-asr-flash
-  - OPENCLAW_TTS_MODEL=qwen3-tts-flash
-  - OPENCLAW_TTS_VOICE=Cherry
-  - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
-  - OPENCLAW_GATEWAY_TOKEN=openclaw-your-gateway-token-here
+openclaw-voice:
+  build:
+    context: .
+    dockerfile: Dockerfile.bailian
+  environment:
+    - ALI_BAILIAN_API_KEY=sk-sp-xxx
+    - OPENCLAW_STT_MODEL=qwen3-asr-flash
+    - OPENCLAW_TTS_MODEL=qwen3-tts-flash
+    - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
+    - OPENCLAW_GATEWAY_TOKEN=openclaw-your-gateway-token-here
 ```
 
 ### 网络配置
@@ -185,98 +193,67 @@ environment:
 - Bridge 端口：18790
 - Voice 端口：8765（HTTP/WebSocket）
 - Project name：`openclaw-voice`
+- Network：`openclaw-voice-network`
+
+---
+
+## 🚀 部署步骤
+
+### 快速部署
+
+```bash
+# 1. 进入项目目录
+cd ~/workspaces/openclaw-voice
+
+# 2. 复制环境变量
+cp .env.example .env
+
+# 3. 编辑配置（确认百炼 API Key）
+vim .env
+
+# 4. 启动服务
+./start.sh
+
+# 5. 查看状态
+docker compose ps
+
+# 6. 验证服务
+curl http://localhost:18789/healthz  # Gateway
+curl http://localhost:8765/         # Voice
+```
+
+### 运维命令
+
+```bash
+# 查看日志
+docker compose logs -f
+
+# 重启服务
+docker compose restart
+
+# 停止服务
+docker compose down
+
+# 重新构建
+docker compose build
+
+# 更新部署
+docker compose up -d --build
+```
 
 ---
 
 ## ⚠️ 已知问题
 
-### 1. Gateway 启动失败
-- **现象**: exit 137（可能被 kill）
-- **影响**: Voice 无法连接 Gateway
-- **状态**: 调试中
-
-### 2. Agent 终止机制失效
+### 1. Agent 终止机制失效
 - **现象**: 不响应停止指令
 - **影响**: 用户体验差，安全隐患
-- **状态**: 待办事项已创建
+- **状态**: 待办事项已创建（高优先级）
 
-### 3. Docker Compose 命令
-- **现象**: `docker compose` vs `docker-compose` 不一致
-- **影响**: 脚本可能失败
-- **状态**: 脚本已适配两种情况
-
----
-
-## 📝 交接说明
-
-## 📝 交接说明
-
-### 正确部署方式（2026-03-16 23:59 更新）
-
-**重要**：使用 OpenClaw 项目中的 `docker-compose.voice.yml` 统一部署！
-
-```bash
-# 1. 进入 OpenClaw 项目目录
-cd ~/workspaces/openclaw
-
-# 2. 复制环境变量
-cp .env.voice .env
-
-# 3. 确认百炼 API Key 正确
-vim .env
-
-# 4. 启动服务
-docker compose -f docker-compose.voice.yml up -d
-
-# 5. 验证
-docker compose -f docker-compose.voice.yml ps
-curl http://localhost:18789/healthz  # Gateway
-curl http://localhost:8765/         # Voice
-```
-
-**架构说明**:
-- Gateway 挂载 `~/.openclaw` 配置（官方方式）
-- Voice 使用环境变量，不挂载主机配置
-- 两个服务在同一 Docker network 中
-- Voice 通过 `http://openclaw-gateway:18789` 连接 Gateway
-
-**详细文档**: `DEPLOYMENT.md`
-
-### 继续工作步骤
-
-1. **确认百炼 API Key**
-   ```bash
-   cat ~/workspaces/openclaw-voice/.env | grep ALI_BAILIAN_API_KEY
-   ```
-
-2. **调试 Gateway 启动**
-   ```bash
-   cd ~/workspaces/openclaw-voice
-   docker compose -f docker-compose.full.yml -p openclaw-voice up -d
-   docker compose -f docker-compose.full.yml -p openclaw-voice logs openclaw-gateway
-   ```
-
-3. **研究终止机制**（高优先级）
-   - 查看 OpenClaw 源码
-   - 理解中断信号处理
-   - 提出修复方案
-
-4. **测试 Voice 功能**
-   ```bash
-   # 访问 Voice UI
-   http://localhost:8765/
-   
-   # 测试 STT
-   # 测试 TTS
-   # 测试 Gateway 连接
-   ```
-
-### 重要注意事项
-
-1. **绝对不要**挂载 `~/.openclaw` 配置目录
-2. **必须使用** project name 避免冲突
-3. **Gateway 命令**必须使用 `node openclaw.mjs gateway`
-4. **健康检查**宽限期至少 60 秒
+### 2. 部署未测试
+- **现象**: 配置已完成，但未实际部署
+- **影响**: 无法验证功能
+- **状态**: 等待主公确认 API Key 后部署
 
 ---
 
@@ -287,11 +264,54 @@ curl http://localhost:8765/         # Voice
 | 百炼 STT 集成 | 100% | ✅ 完成 |
 | 百炼 TTS 集成 | 100% | ✅ 完成 |
 | Docker 配置 | 100% | ✅ 完成 |
-| Gateway 启动 | 0% | ❌ 失败 |
-| Voice 测试 | 0% | ⏳ 阻塞 |
-| 终止机制研究 | 0% | ⏳ 待办 |
+| 部署测试 | 0% | ⏳ 待执行 |
+| Voice 功能测试 | 0% | ⏳ 阻塞 |
+| 终止机制研究 | 0% | ⏳ 待办（高优先级）|
 
-**总体进度**: 约 60%（Gateway 启动问题阻塞后续测试）
+**总体进度**: 约 70%（等待部署测试）
+
+---
+
+## 📝 交接说明
+
+### 继续工作步骤
+
+1. **确认百炼 API Key**
+   ```bash
+   cat .env | grep ALI_BAILIAN_API_KEY
+   ```
+
+2. **部署测试**
+   ```bash
+   cd ~/workspaces/openclaw-voice
+   ./start.sh
+   docker compose ps
+   ```
+
+3. **验证服务**
+   ```bash
+   curl http://localhost:18789/healthz
+   curl http://localhost:8765/
+   ```
+
+4. **研究终止机制**（高优先级）
+   - 查看 OpenClaw 源码
+   - 理解中断信号处理
+   - 提出修复方案
+
+### 重要注意事项
+
+1. **在 openclaw-voice 项目中工作**
+   - 不修改 `~/workspaces/openclaw/` 官方仓库
+   - 只借鉴官方配置方式
+
+2. **Gateway 挂载主机配置**
+   - `~/.openclaw` 是只读挂载
+   - 不修改主机配置
+
+3. **Voice 使用环境变量**
+   - 所有配置通过 `.env` 管理
+   - 不挂载主机配置
 
 ---
 
@@ -299,9 +319,10 @@ curl http://localhost:8765/         # Voice
 
 **项目位置**: `~/workspaces/openclaw-voice/`
 **Git 分支**: `main`
-**最后提交**: `7643249`
+**最后提交**: `5f46cba`
 
 ---
 
-*文档创建：2026-03-16 23:47*
-*下次更新：待 Gateway 问题解决后*
+*文档创建：2026-03-16 23:59*
+*最后更新：2026-03-17 00:02*
+*下次更新：待部署测试完成后*
