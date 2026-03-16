@@ -1,0 +1,29 @@
+{
+  "id": "voice-agent",
+  "name": "Voice Agent",
+  "version": "0.1.0",
+  "description": "Browser-based voice interaction channel with Bailian STT/TTS",
+  "main": "./dist/index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": { "type": "boolean", "default": true },
+      "bailian": {
+        "type": "object",
+        "properties": {
+          "apiKey": { "type": "string" },
+          "sttModel": { "type": "string", "default": "qwen3-asr-flash" },
+          "ttsModel": { "type": "string", "default": "qwen3-tts-instruct-flash" },
+          "ttsVoice": { "type": "string", "default": "Cherry" }
+        }
+      },
+      "serve": {
+        "type": "object",
+        "properties": {
+          "port": { "type": "integer", "default": 8765 },
+          "path": { "type": "string", "default": "/voice-agent/stream" }
+        }
+      }
+    }
+  }
+}
