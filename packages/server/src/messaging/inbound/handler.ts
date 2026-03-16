@@ -42,9 +42,9 @@ export async function handleAudioMessage(
   });
   
   try {
-    // Step 1: STT - Convert audio to text
+    // Step 1: STT - Convert audio to text (with retry)
     console.log('[handler] Calling STT...');
-    const sttResult = await sttClient.transcribe(completeAudio);
+    const sttResult = await transcribeWithRetry(sttClient, completeAudio, 3);
     console.log(`[handler] STT result: "${sttResult.text}"`);
     
     // Send transcript to browser
@@ -169,4 +169,38 @@ function sendError(ws: WebSocket, sessionId: string, code: string, message: stri
       },
     }));
   }
+}
+
+/**
+ * Transcribe audio with retry logic.
+ * 
+ * @param sttClient - STT client
+ * @param audio - Audio data
+ * @param maxRetries - Maximum retry attempts
+ * @returns STT result
+ */
+async function transcribeWithRetry(
+  sttClient: STTClient,
+  audio: string,
+  maxRetries: number
+): Promise<{ text: string }> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await sttClient.transcribe(audio);
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.warn(`[handler] STT attempt ${attempt}/${maxRetries} failed: ${lastError.message}`);
+      
+      if (attempt < maxRetries) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delayMs = Math.pow(2, attempt - 1) * 1000;
+        console.log(`[handler] Retrying in ${delayMs}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+  
+  throw lastError || new Error('STT failed after all retries');
 }
