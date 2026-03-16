@@ -12,7 +12,6 @@ function App() {
     connect,
     disconnect,
     sendAudio,
-    setTranscript,
     setError,
   } = useVoiceStore();
 

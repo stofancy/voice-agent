@@ -28,6 +28,7 @@ interface VoiceState {
   setTranscript: (text: string) => void;
   setError: (error: string | null) => void;
   playAudio: (base64: string) => void;
+  processAudioQueue: () => Promise<void>;
 }
 
 export const useVoiceStore = create<VoiceState>((set, get) => ({
@@ -110,7 +111,7 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
   },
 
   sendAudio: (base64: string, isFinal: boolean) => {
-    const { ws, sessionState } = get();
+    const { ws } = get();
     
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       console.error('[WebSocket] Not connected');
@@ -179,9 +180,9 @@ export const useVoiceStore = create<VoiceState>((set, get) => ({
     try {
       // 播放音频
       const audioContext = new AudioContext({ sampleRate: 24000 });
-      const audioBuffer = await audioContext.decodeAudioData(
-        first.buffer.slice(0)
-      );
+      // 创建 ArrayBuffer 副本（避免 SharedArrayBuffer 类型问题）
+      const arrayBuffer = first.buffer.slice(0) as ArrayBuffer;
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
       const source = audioContext.createBufferSource();
       source.buffer = audioBuffer;
