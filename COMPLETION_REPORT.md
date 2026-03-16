@@ -124,14 +124,6 @@ voice = "Cherry"
 | STT 语言 | `zh` | 中文 |
 | TTS 语言 | `Chinese` | 中文 |
 
-### OpenClaw Gateway
-
-| 配置项 | 值 | 说明 |
-|--------|-----|------|
-| Gateway URL | `http://host.docker.internal:7777` | Docker 访问主机 |
-| Gateway Token | `REDACTED-gateway-token` | 主公现有配置 |
-| 端口 | 7777 | 主公 Gateway 端口 |
-
 ### 服务端口
 
 | 服务 | 端口 | 说明 |
