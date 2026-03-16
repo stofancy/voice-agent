@@ -1,11 +1,11 @@
 """
-OpenClaw Voice Server
+OpenClaw Voice Server - Bailian Edition
 
 WebSocket server that handles:
 - Audio input from browser
-- Speech-to-Text via Whisper
-- AI backend communication
-- Text-to-Speech via ElevenLabs
+- Speech-to-Text via Alibaba Bailian (Qwen-ASR)
+- AI backend communication (OpenClaw Gateway)
+- Text-to-Speech via Alibaba Bailian (Qwen-TTS)
 - Audio streaming back to browser
 """
 
@@ -23,8 +23,9 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic_settings import BaseSettings
 
-from .stt import WhisperSTT
-from .tts import ChatterboxTTS
+# Bailian modules
+from .bailian_stt import BailianSTT
+from .bailian_tts import BailianTTS
 from .backend import AIBackend
 from .vad import VoiceActivityDetector
 from .auth import token_manager, load_keys_from_env, APIKey
@@ -42,16 +43,20 @@ class Settings(BaseSettings):
     require_auth: bool = False  # Set True for production
     master_key: Optional[str] = None  # Admin key for full access
     
-    # STT
-    stt_model: str = "base"  # tiny, base, small, medium, large-v3-turbo
-    stt_device: str = "auto"  # auto, cpu, cuda, mps
+    # Bailian API
+    bailian_api_key: Optional[str] = None  # 百炼 API Key
     
-    # TTS
-    tts_model: str = "chatterbox"
-    tts_voice: Optional[str] = None  # Path to voice sample for cloning
+    # STT (Bailian)
+    stt_model: str = "qwen3-asr-flash"  # 百炼 STT 模型
+    stt_language: str = "zh"  # 识别语言
+    
+    # TTS (Bailian)
+    tts_model: str = "qwen3-tts-flash"  # 百炼 TTS 模型
+    tts_voice: str = "Cherry"  # 音色：Cherry, Bella, etc.
+    tts_language: str = "Chinese"  # 合成语言
     
     # AI Backend
-    backend_type: str = "openai"  # openai, openclaw, custom
+    backend_type: str = "openclaw"  # openclaw, openai, custom
     backend_url: str = "https://api.openai.com/v1"
     backend_model: str = "gpt-4o-mini"
     openai_api_key: Optional[str] = None
@@ -83,7 +88,7 @@ async def startup():
     """Initialize models on server start."""
     global stt, tts, backend, vad
     
-    logger.info("Initializing OpenClaw Voice server...")
+    logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
     
     # Load API keys
     load_keys_from_env()
@@ -92,17 +97,21 @@ async def startup():
     else:
         logger.warning("⚠️ Authentication DISABLED (dev mode)")
     
-    # Initialize STT
-    logger.info(f"Loading STT model: {settings.stt_model}")
-    stt = WhisperSTT(
-        model_name=settings.stt_model,
-        device=settings.stt_device,
+    # Initialize Bailian STT
+    logger.info(f"Loading Bailian STT: {settings.stt_model}")
+    stt = BailianSTT(
+        api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
+        model=settings.stt_model,
+        language=settings.stt_language,
     )
     
-    # Initialize TTS
-    logger.info(f"Loading TTS model: {settings.tts_model}")
-    tts = ChatterboxTTS(
-        voice_sample=settings.tts_voice,
+    # Initialize Bailian TTS
+    logger.info(f"Loading Bailian TTS: {settings.tts_model}")
+    tts = BailianTTS(
+        api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
+        model=settings.tts_model,
+        voice=settings.tts_voice,
+        language_type=settings.tts_language,
     )
     
     # Initialize AI backend
@@ -139,7 +148,7 @@ async def startup():
     logger.info("Loading VAD model")
     vad = VoiceActivityDetector()
     
-    logger.info("✅ OpenClaw Voice server ready!")
+    logger.info("✅ OpenClaw Voice server (Bailian) ready!")
 
 
 @app.get("/")
@@ -267,82 +276,61 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Combine audio chunks
                     audio_data = np.concatenate(audio_buffer)
                     
-                    # Transcribe
-                    logger.debug("Transcribing audio...")
-                    transcript = await stt.transcribe(audio_data)
+                    # Transcribe with Bailian STT
+                    logger.debug("Transcribing audio (Bailian STT)...")
+                    transcript, success = await stt.transcribe(audio_data)
                     
                     await websocket.send_json({
                         "type": "transcript",
                         "text": transcript,
                         "final": True,
                     })
-                    logger.info(f"Transcript: {transcript}")
+                    logger.info(f"🎤 Transcript: {transcript}")
                     
-                    if transcript.strip():
-                        # Stream AI response with progressive TTS
-                        logger.debug("Streaming AI response...")
+                    if transcript.strip() and success:
+                        # Get AI response
+                        logger.debug("Getting AI response...")
                         
-                        full_response = ""
-                        sentence_buffer = ""
-                        audio_chunks = []
-                        
-                        # Stream response and synthesize sentences as they complete
-                        async for chunk in backend.chat_stream(transcript):
-                            full_response += chunk
-                            sentence_buffer += chunk
+                        try:
+                            # Simple non-streaming for now
+                            response = await backend.chat(transcript)
+                            full_response = response or "抱歉，未能生成回复"
                             
-                            # Send text chunk for progressive display
                             await websocket.send_json({
                                 "type": "response_chunk",
-                                "text": chunk,
+                                "text": full_response,
                             })
                             
-                            # Check for sentence boundaries
-                            while any(sep in sentence_buffer for sep in ['. ', '! ', '? ', '.\n', '!\n', '?\n']):
-                                # Find first sentence boundary
-                                earliest_idx = len(sentence_buffer)
-                                for sep in ['. ', '! ', '? ', '.\n', '!\n', '?\n']:
-                                    idx = sentence_buffer.find(sep)
-                                    if idx != -1 and idx < earliest_idx:
-                                        earliest_idx = idx + len(sep)
-                                
-                                if earliest_idx < len(sentence_buffer):
-                                    sentence = sentence_buffer[:earliest_idx].strip()
-                                    sentence_buffer = sentence_buffer[earliest_idx:]
-                                    
-                                    if sentence:
-                                        # Clean and synthesize this sentence
-                                        speech_text = clean_for_speech(sentence)
-                                        if speech_text:
-                                            logger.debug(f"Synthesizing: {speech_text[:50]}...")
-                                            async for audio_chunk in tts.synthesize_stream(speech_text):
-                                                audio_b64 = base64.b64encode(audio_chunk).decode()
-                                                await websocket.send_json({
-                                                    "type": "audio_chunk",
-                                                    "data": audio_b64,
-                                                    "sample_rate": 24000,
-                                                })
-                                else:
-                                    break
-                        
-                        # Handle any remaining text
-                        if sentence_buffer.strip():
-                            speech_text = clean_for_speech(sentence_buffer.strip())
-                            if speech_text:
-                                async for audio_chunk in tts.synthesize_stream(speech_text):
-                                    audio_b64 = base64.b64encode(audio_chunk).decode()
-                                    await websocket.send_json({
-                                        "type": "audio_chunk",
-                                        "data": audio_b64,
-                                        "sample_rate": 24000,
-                                    })
-                        
-                        # Signal end of response
-                        await websocket.send_json({
-                            "type": "response_complete",
-                            "text": full_response,
-                        })
-                        logger.info(f"Response complete: {full_response[:100]}...")
+                            # Synthesize with Bailian TTS
+                            logger.debug(f"🔊 Synthesizing response: {full_response[:50]}...")
+                            
+                            # Collect all audio chunks
+                            audio_chunks = []
+                            async for audio_chunk in tts.synthesize(full_response, stream=False):
+                                audio_chunks.append(audio_chunk)
+                            
+                            if audio_chunks:
+                                # Merge and send
+                                full_audio = b''.join(audio_chunks)
+                                audio_b64 = base64.b64encode(full_audio).decode()
+                                await websocket.send_json({
+                                    "type": "audio_chunk",
+                                    "data": audio_b64,
+                                    "sample_rate": 24000,
+                                })
+                            
+                            await websocket.send_json({
+                                "type": "response_complete",
+                                "text": full_response,
+                            })
+                            logger.info(f"✅ Response complete: {full_response[:100]}...")
+                            
+                        except Exception as e:
+                            logger.error(f"AI/TTS error: {e}")
+                            await websocket.send_json({
+                                "type": "error",
+                                "message": str(e),
+                            })
                 
                 audio_buffer = []
                 await websocket.send_json({"type": "listening_stopped"})
