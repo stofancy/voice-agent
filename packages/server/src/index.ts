@@ -1,9 +1,12 @@
 // Voice Agent Plugin Entry Point
 import type { OpenClawPluginApi } from 'openclaw';
 import { voiceAgentPlugin } from './channel/plugin.js';
+import { VoiceAgentWebSocketServer } from './websocket/server.js';
+import { SessionManager } from './session/manager.js';
 
 // ★ Critical: Save runtime for Agent calls
 let pluginRuntime: any = null;
+let wsServer: VoiceAgentWebSocketServer | null = null;
 
 export function getRuntime(): any {
   if (!pluginRuntime) {
@@ -59,8 +62,31 @@ const plugin = {
     // ★ Critical: Save runtime for Agent calls
     pluginRuntime = (api as any).runtime;
     
+    // 获取配置
+    const config = (api as any).config?.plugins?.['voice-agent'] || {};
+    const serveConfig = config.serve || {};
+    const bailianConfig = config.bailian || {};
+    
     // 注册 Channel
     api.registerChannel({ plugin: voiceAgentPlugin });
+
+    // 启动 WebSocket 服务器（构造函数中自动启动）
+    const sessionManager = new SessionManager({
+      maxDurationMs: config.session?.maxDurationMs || 300000,
+      idleTimeoutMs: config.session?.idleTimeoutMs || 30000,
+    });
+    
+    wsServer = new VoiceAgentWebSocketServer({
+      port: serveConfig.port || 8765,
+      path: serveConfig.path || '/voice-agent/stream',
+      bind: serveConfig.bind || '0.0.0.0',
+      bailianApiKey: bailianConfig.apiKey || process.env.ALI_BAILIAN_API_KEY || '',
+      sttModel: bailianConfig.sttModel || 'qwen3-asr-flash',
+      ttsModel: bailianConfig.ttsModel || 'qwen3-tts-instruct-flash',
+      ttsVoice: bailianConfig.ttsVoice || 'Cherry',
+    }, sessionManager);
+    
+    api.logger.info(`[voice-agent] WebSocket server started on port ${serveConfig.port || 8765}`);
 
     // 日志钩子
     api.on('before_tool_call', (event) => {
