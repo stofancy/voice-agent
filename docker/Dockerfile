@@ -1,6 +1,16 @@
 # Voice Agent Plugin - Custom OpenClaw Image
 FROM ghcr.io/openclaw/openclaw:latest
 
+# 代理配置（通过 build-arg 传入）
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+
+# 设置构建时环境变量
+ENV HTTP_PROXY=${HTTP_PROXY:-http://192.168.0.147:7890}
+ENV HTTPS_PROXY=${HTTPS_PROXY:-http://192.168.0.147:7890}
+ENV NO_PROXY=${NO_PROXY:-localhost,127.0.0.1,.local}
+
 # 使用 root 用户安装插件
 USER root
 
@@ -11,19 +21,25 @@ RUN mkdir -p /home/node/.openclaw/extensions && \
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
 
-# 配置 npm 代理（直接在 RUN 中设置，确保生效）
+# 配置 npm 代理（使用环境变量）
 WORKDIR /tmp/voice-agent-src
-RUN npm config set proxy http://192.168.0.147:7890 && \
-    npm config set https-proxy http://192.168.0.147:7890 && \
+RUN echo "Configuring npm proxy: $HTTP_PROXY" && \
+    npm config set proxy $HTTP_PROXY && \
+    npm config set https-proxy $HTTPS_PROXY && \
     npm config set strict-ssl false && \
-    npm config set registry http://registry.npmjs.org/
+    npm config set registry https://registry.npmjs.org/ && \
+    npm config list
 
-# 安装插件依赖并编译
-RUN npm install --omit=dev --verbose && \
-    npm run build && \
+# 安装插件依赖并编译（带详细日志）
+RUN echo "=== npm install start ===" && \
+    npm install --omit=dev --loglevel verbose 2>&1 && \
+    echo "=== npm build start ===" && \
+    npm run build 2>&1 && \
+    echo "=== copy files ===" && \
     cp -r /tmp/voice-agent-src /home/node/.openclaw/extensions/voice-agent && \
     chown -R node:node /home/node/.openclaw/extensions/voice-agent && \
-    rm -rf /tmp/voice-agent-src
+    rm -rf /tmp/voice-agent-src && \
+    echo "=== build complete ==="
 
 # 切换回 node 用户
 USER node
@@ -32,6 +48,8 @@ WORKDIR /home/node
 # 设置运行时环境变量
 ENV ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
 ENV NODE_ENV=production
+ENV HTTP_PROXY=${HTTP_PROXY:-}
+ENV HTTPS_PROXY=${HTTPS_PROXY:-}
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

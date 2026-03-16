@@ -3,11 +3,17 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+      args:
+        - HTTP_PROXY=http://192.168.0.147:7890
+        - HTTPS_PROXY=http://192.168.0.147:7890
+        - NO_PROXY=localhost,127.0.0.1,.local
     image: xihe-voice-plugin:latest
     container_name: xihe-voice-plugin
     environment:
       - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
       - NODE_ENV=production
+      - HTTP_PROXY=http://192.168.0.147:7890
+      - HTTPS_PROXY=http://192.168.0.147:7890
     ports:
       - "${WEBUI_PORT:-5182}:5173"
       - "${WS_PORT:-8774}:8765"
