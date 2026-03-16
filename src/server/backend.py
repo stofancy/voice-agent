@@ -83,7 +83,7 @@ class AIBackend:
         Yields:
             Text chunks as they're generated
         """
-        if self.backend_type == "openai" and self._client:
+        if self.backend_type in ("openai", "openclaw") and self._client:
             async for chunk in self._chat_openai_stream(user_message):
                 yield chunk
         else:
