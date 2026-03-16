@@ -304,18 +304,13 @@ async def websocket_endpoint(websocket: WebSocket):
                                 })
                                 logger.debug(f"📝 Sent subtitle chunk: {chunk[:30]}...")
                             
-                            # Synthesize with Bailian TTS
-                            logger.debug(f"🔊 Synthesizing response: {full_response[:50]}...")
+                            # Synthesize with Bailian TTS (streaming)
+                            logger.debug(f"🔊 Synthesizing response (streaming): {full_response[:50]}...")
                             
-                            # Collect all audio chunks
-                            audio_chunks = []
-                            async for audio_chunk in tts.synthesize(full_response, stream=False):
-                                audio_chunks.append(audio_chunk)
-                            
-                            if audio_chunks:
-                                # Merge and send
-                                full_audio = b''.join(audio_chunks)
-                                audio_b64 = base64.b64encode(full_audio).decode()
+                            # Stream TTS audio chunks
+                            async for audio_chunk in tts.synthesize(full_response, stream=True):
+                                # Send each audio chunk immediately
+                                audio_b64 = base64.b64encode(audio_chunk).decode()
                                 await websocket.send_json({
                                     "type": "audio_chunk",
                                     "data": audio_b64,
