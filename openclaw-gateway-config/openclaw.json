@@ -9,6 +9,13 @@
     "auth": {
       "mode": "token",
       "token": "REDACTED-openclaw-voice-token"
+    },
+    "http": {
+      "endpoints": {
+        "chatCompletions": {
+          "enabled": true
+        }
+      }
     }
   },
   "models": {
@@ -91,6 +98,12 @@
         "id": "main",
         "default": true,
         "name": "Voice Assistant",
+        "workspace": "/app/workspace",
+        "model": "bailian/qwen3-coder-next"
+      },
+      {
+        "id": "voice",
+        "name": "Voice Agent",
         "workspace": "/app/workspace",
         "model": "bailian/qwen3-coder-next"
       }
