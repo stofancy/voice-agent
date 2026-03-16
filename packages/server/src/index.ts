@@ -2,6 +2,16 @@
 import type { OpenClawPluginApi } from 'openclaw';
 import { voiceAgentPlugin } from './channel/plugin.js';
 
+// ★ Critical: Save runtime for Agent calls
+let pluginRuntime: any = null;
+
+export function getRuntime(): any {
+  if (!pluginRuntime) {
+    throw new Error('Plugin runtime not initialized - call register() first');
+  }
+  return pluginRuntime;
+}
+
 const plugin = {
   id: 'voice-agent',
   name: 'Voice Agent',
@@ -46,6 +56,9 @@ const plugin = {
     },
   },
   register(api: OpenClawPluginApi) {
+    // ★ Critical: Save runtime for Agent calls
+    pluginRuntime = (api as any).runtime;
+    
     // 注册 Channel
     api.registerChannel({ plugin: voiceAgentPlugin });
 
