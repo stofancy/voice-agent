@@ -121,9 +121,9 @@ async def startup():
     if gateway_url and gateway_token:
         logger.info(f"🦞 Connecting to OpenClaw Gateway: {gateway_url}")
         backend = AIBackend(
-            backend_type="openai",
+            backend_type="openclaw",
             url=f"{gateway_url}/v1",
-            model="openclaw:main",
+            model="bailian/qwen3-coder-next",
             api_key=gateway_token,
             system_prompt=(
                 "This conversation is happening via real-time voice chat. "
