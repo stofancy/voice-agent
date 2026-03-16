@@ -51,8 +51,6 @@ docker-compose -f docker-compose.bailian.yml up --build -d
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `ALI_BAILIAN_API_KEY` | `YOUR_BAILIAN_API_KEY` | 百炼 API Key |
-| `OPENCLAW_GATEWAY_URL` | `http://host.docker.internal:7777` | OpenClaw Gateway URL |
-| `OPENCLAW_GATEWAY_TOKEN` | `REDACTED-gateway-token` | Gateway Token |
 | `OPENCLAW_STT_MODEL` | `qwen3-asr-flash` | STT 模型 |
 | `OPENCLAW_TTS_MODEL` | `qwen3-tts-flash` | TTS 模型 |
 | `OPENCLAW_TTS_VOICE` | `Cherry` | TTS 音色 |
