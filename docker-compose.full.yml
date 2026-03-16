@@ -1,42 +1,123 @@
-version: '3.8'
+# OpenClaw Voice - Full Stack Deployment (Gateway + Voice)
+# Based on official OpenClaw docker-compose.yml configuration
+# Usage: docker compose -f docker-compose.full.yml up -d
 
 services:
-  # OpenClaw Gateway Service
+  # ===========================================
+  # OpenClaw Gateway (Official Configuration)
+  # ===========================================
   openclaw-gateway:
-    image: ghcr.io/openclaw/openclaw:latest
-    container_name: openclaw-gateway
-    ports:
-      - "12589:18789"
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
     environment:
-      - OPENCLAW_DEFAULT_MODEL=bailian/qwen3-coder-next
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
+      # Bailian API Key for Gateway models
+      ALI_BAILIAN_API_KEY: ${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+    init: true
     restart: unless-stopped
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18789/"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - openclaw-voice-network
 
-  # OpenClaw Voice Service
-  openclaw-voice-bailian:
+  # ===========================================
+  # OpenClaw CLI (Official Configuration)
+  # ===========================================
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    network_mode: "service:openclaw-gateway"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      BROWSER: echo
+      CLAUDE_AI_SESSION_KEY: ${CLAUDE_AI_SESSION_KEY:-}
+      CLAUDE_WEB_SESSION_KEY: ${CLAUDE_WEB_SESSION_KEY:-}
+      CLAUDE_WEB_COOKIE: ${CLAUDE_WEB_COOKIE:-}
+      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on:
+      - openclaw-gateway
+
+  # ===========================================
+  # OpenClaw Voice (Bailian STT/TTS)
+  # ===========================================
+  openclaw-voice:
     build:
       context: .
       dockerfile: Dockerfile.bailian
-    ports:
-      - "8765:8765"
     environment:
-      - ALI_BAILIAN_API_KEY=YOUR_BAILIAN_API_KEY
+      # Bailian API (STT + TTS)
+      - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
+      # STT Configuration
       - OPENCLAW_STT_MODEL=qwen3-asr-flash
       - OPENCLAW_STT_LANGUAGE=zh
+      # TTS Configuration
       - OPENCLAW_TTS_MODEL=qwen3-tts-flash
       - OPENCLAW_TTS_VOICE=Cherry
       - OPENCLAW_TTS_LANGUAGE=Chinese
+      # Gateway Connection (same network, use service name)
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
-      - OPENCLAW_GATEWAY_TOKEN=YOUR_GATEWAY_TOKEN
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
+    ports:
+      - "${OPENCLAW_VOICE_PORT:-8765}:8765"
     depends_on:
       openclaw-gateway:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8765/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - openclaw-voice-network
 
-volumes:
-  openclaw-gateway-data:
+networks:
+  openclaw-voice-network:
+    driver: bridge
