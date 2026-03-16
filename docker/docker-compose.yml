@@ -6,10 +6,16 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       args:
+        - HTTP_PROXY=${HTTP_PROXY:-}
+        - HTTPS_PROXY=${HTTPS_PROXY:-}
+        - NO_PROXY=${NO_PROXY:-}
         - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
     image: voice-agent-plugin:latest
     container_name: voice-agent-plugin
     environment:
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
       - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
       - NODE_ENV=production
     ports:

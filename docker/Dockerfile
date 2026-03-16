@@ -1,12 +1,20 @@
 # Voice Agent Plugin - Custom OpenClaw Image
 FROM ghcr.io/openclaw/openclaw:latest
 
-# 使用 root 用户安装插件
-USER root
+# 代理配置（通过 build-arg 传入）
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
 
 # 设置环境变量
+ENV HTTP_PROXY=${HTTP_PROXY:-}
+ENV HTTPS_PROXY=${HTTPS_PROXY:-}
+ENV NO_PROXY=${NO_PROXY:-}
 ENV ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-}
 ENV NODE_ENV=production
+
+# 使用 root 用户安装插件
+USER root
 
 # 创建插件目录
 RUN mkdir -p /home/node/.openclaw/extensions && \
@@ -14,6 +22,13 @@ RUN mkdir -p /home/node/.openclaw/extensions && \
 
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
+
+# 配置 npm 代理
+RUN if [ -n "$HTTP_PROXY" ]; then \
+      npm config set proxy $HTTP_PROXY && \
+      npm config set https-proxy $HTTPS_PROXY && \
+      npm config set strict-ssl false; \
+    fi
 
 # 安装插件依赖并编译
 WORKDIR /tmp/voice-agent-src
