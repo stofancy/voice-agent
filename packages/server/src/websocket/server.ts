@@ -2,10 +2,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'http';
 import { SessionManager } from '../session/manager.js';
-import type { ClientMessage, ServerMessage } from '../types.js';
+import type { ClientMessage, ServerMessage, VoiceAgentConfig } from '../types.js';
 import { STTClient } from '../stt/client.js';
 import { TTSClient } from '../tts/client.js';
-import { OpenAI } from 'openai';
+import { handleAudioMessage } from '../messaging/inbound/handler.js';
 
 export interface WebSocketServerOptions {
   port: number;
@@ -25,7 +25,6 @@ interface SessionContext {
   audioChunks: string[];
   sttClient: STTClient;
   ttsClient: TTSClient;
-  agentClient?: OpenAI;
 }
 
 export class VoiceAgentWebSocketServer {
@@ -36,6 +35,7 @@ export class VoiceAgentWebSocketServer {
   private readonly path: string;
   private readonly gatewayUrl?: string;
   private readonly gatewayToken?: string;
+  private readonly config: VoiceAgentConfig;
 
   constructor(
     options: WebSocketServerOptions,
@@ -46,6 +46,19 @@ export class VoiceAgentWebSocketServer {
     this.sessionManager = sessionManager;
     this.gatewayUrl = options.gatewayUrl;
     this.gatewayToken = options.gatewayToken;
+    this.config = {
+      enabled: true,
+      serve: { port: options.port, path: options.path, bind: options.bind ?? '0.0.0.0' },
+      bailian: {
+        apiKey: options.bailianApiKey,
+        sttModel: options.sttModel,
+        ttsModel: options.ttsModel,
+        ttsVoice: options.ttsVoice,
+      },
+      audio: { inputSampleRate: 16000, outputSampleRate: 24000 },
+      session: { maxDurationMs: 300000, idleTimeoutMs: 30000 },
+      security: { pairingRequired: false },
+    };
 
     this.wss = new WebSocketServer({
       port: options.port,
@@ -94,14 +107,6 @@ export class VoiceAgentWebSocketServer {
         voice: options.ttsVoice,
       }),
     };
-
-    // 创建 Agent 客户端（如果配置了 Gateway）
-    if (this.gatewayUrl && this.gatewayToken) {
-      context.agentClient = new OpenAI({
-        apiKey: this.gatewayToken,
-        baseURL: this.gatewayUrl,
-      });
-    }
 
     this.sessions.set(sessionId, context);
 
@@ -181,7 +186,7 @@ export class VoiceAgentWebSocketServer {
     context: SessionContext,
     message: ClientMessage & { type: 'audio' }
   ): Promise<void> {
-    const { ws, sessionId, audioChunks, sttClient, ttsClient, agentClient } = context;
+    const { ws, sessionId, audioChunks } = context;
     
     console.log(`[WebSocket] Audio received from ${sessionId}: ${message.data.payload.length} bytes`);
 
@@ -191,97 +196,22 @@ export class VoiceAgentWebSocketServer {
     // 如果是最后一个音频块（isFinal=true），开始处理
     if ((message.data as any).isFinal) {
       try {
-        // 更新状态
-        this.sessionManager.updateState(sessionId, 'processing');
-        this.send(ws, {
-          type: 'status',
-          state: 'processing',
-          sessionId,
-        });
-
-        // 合并所有音频块
-        const fullAudio = audioChunks.join('');
-        audioChunks.length = 0; // 清空
-
-        // 1. STT: audio → text
-        console.log(`[STT] Transcribing ${fullAudio.length} bytes...`);
-        const sttResult = await sttClient.transcribe(fullAudio);
-        console.log(`[STT] Result: ${sttResult.text}`);
-
-        // 发送识别结果
-        this.send(ws, {
-          type: 'transcript',
-          data: {
-            text: sttResult.text,
-            isFinal: true,
-          },
-        });
-
-        // 2. Agent: text → reply
-        let replyText = '抱歉，我暂时无法回复。';
-        if (agentClient) {
-          console.log(`[Agent] Sending to Agent: ${sttResult.text}`);
-          const completion = await agentClient.chat.completions.create({
-            model: 'gpt-4o',
-            messages: [
-              { role: 'user', content: sttResult.text },
-            ],
-          });
-          replyText = completion.choices[0]?.message?.content || replyText;
-          console.log(`[Agent] Reply: ${replyText}`);
-        } else {
-          // 如果没有配置 Agent，使用简单回复
-          replyText = `我收到了："${sttResult.text}"`;
-        }
-
-        // 3. TTS: reply → audio
-        console.log(`[TTS] Synthesizing: ${replyText}`);
-        const ttsResult = await ttsClient.synthesize(replyText);
+        // Get session info
+        const session = this.sessionManager.createSession(sessionId);
+        session.userId = context.sessionId; // Use sessionId as userId for now
         
-        if (ttsResult.audioData) {
-          // 转换为 Base64
-          const audioBase64 = Buffer.from(ttsResult.audioData).toString('base64');
-          
-          // 更新状态
-          this.sessionManager.updateState(sessionId, 'speaking');
-          this.send(ws, {
-            type: 'status',
-            state: 'speaking',
-            sessionId,
-          });
-
-          // 发送音频
-          this.send(ws, {
-            type: 'audio_output',
-            data: {
-              format: 'pcm' as const,
-              sampleRate: 24000,
-              channels: 1,
-              encoding: 'base64' as const,
-              payload: audioBase64,
-              isChunk: false,
-            },
-          });
-
-          // 恢复空闲状态
-          this.sessionManager.updateState(sessionId, 'idle');
-          this.send(ws, {
-            type: 'status',
-            state: 'idle',
-            sessionId,
-          });
-        }
+        // Use handler for STT → Agent → TTS pipeline
+        await handleAudioMessage(ws, session, audioChunks, this.config);
+        
+        // Clear audio chunks after processing
+        audioChunks.length = 0;
+        
       } catch (error) {
-        console.error(`[Pipeline] Error:`, error);
-        this.sendError(ws, sessionId, 'PIPELINE_ERROR', error instanceof Error ? error.message : 'Unknown error');
-        this.sessionManager.updateState(sessionId, 'idle');
+        console.error(`[WebSocket] handleAudio error: ${error}`);
+        this.sendError(context.ws, sessionId, 'PIPELINE_ERROR', error instanceof Error ? error.message : 'Unknown error');
       }
-    } else {
-      // 中间音频块，更新状态为 listening
-      this.sessionManager.updateState(sessionId, 'listening');
     }
   }
-
   private async handleControl(
     context: SessionContext,
     message: ClientMessage & { type: 'control' }
