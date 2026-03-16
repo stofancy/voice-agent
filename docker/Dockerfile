@@ -11,14 +11,14 @@ RUN mkdir -p /home/node/.openclaw/extensions && \
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
 
-# 安装所有依赖（包括 devDependencies 用于构建）
+# 安装所有依赖（包括 devDependencies）
 WORKDIR /tmp/voice-agent-src
-RUN echo "=== npm install (all deps) ===" && \
-    npm install 2>&1 && \
+RUN echo "=== npm install (include dev) ===" && \
+    npm install --include=dev 2>&1 && \
+    echo "=== installed packages ===" && \
+    ls node_modules/ | wc -l && \
     echo "=== npm build ===" && \
     npm run build 2>&1 && \
-    echo "=== npm prune (remove dev) ===" && \
-    npm prune --omit=dev 2>&1 && \
     echo "=== copy files ===" && \
     cp -r /tmp/voice-agent-src /home/node/.openclaw/extensions/voice-agent && \
     chown -R node:node /home/node/.openclaw/extensions/voice-agent && \
