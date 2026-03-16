@@ -1,10 +1,10 @@
 services:
-  voice-agent:
+  xihe-voice:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    image: voice-agent-plugin:latest
-    container_name: voice-agent-plugin
+    image: xihe-voice-plugin:latest
+    container_name: xihe-voice-plugin
     environment:
       - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
       - NODE_ENV=production
@@ -19,10 +19,10 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - voice-agent-network
+      - xihe-voice-network
     volumes:
       # 持久化 OpenClaw 配置
-      - voice-agent-data:/home/node/.openclaw
+      - xihe-voice-data:/home/node/.openclaw
     logging:
       driver: "json-file"
       options:
@@ -30,9 +30,9 @@ services:
         max-file: "3"
 
 networks:
-  voice-agent-network:
+  xihe-voice-network:
     driver: bridge
 
 volumes:
-  voice-agent-data:
+  xihe-voice-data:
     driver: local
