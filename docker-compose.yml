@@ -1,99 +1,23 @@
-# OpenClaw Voice - Full Stack Docker Compose
-# Deploy Gateway + Voice together in the same network
-# 
-# IMPORTANT: Does NOT mount host ~/.openclaw config
-# Uses independent configuration for Gateway
+# OpenClaw Voice - Docker Compose
+# Voice joins the official OpenClaw network
+# Does NOT run Gateway - uses external Gateway from official OpenClaw
 #
 # Usage:
-#   1. cp .env.example .env
-#   2. Edit .env with your Bailian API Key
-#   3. docker compose up -d
+#   1. Start official Gateway first:
+#      cd ~/workspaces/openclaw
+#      docker compose up -d openclaw-gateway
+#      docker compose run --rm openclaw-cli onboard
+#
+#   2. Start Voice:
+#      cd ~/workspaces/openclaw-voice
+#      docker compose up -d
 
 name: openclaw-voice
 
 services:
   # ===========================================
-  # OpenClaw Gateway (Independent Instance)
-  # Reference: Official docker-compose.yml pattern
-  # BUT uses independent config (NOT host ~/.openclaw)
-  # ===========================================
-  openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
-    environment:
-      HOME: /home/node
-      TERM: xterm-256color
-      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
-      # Gateway authentication
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
-      # Bailian API Key for Gateway models
-      ALI_BAILIAN_API_KEY: ${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
-      # Default model
-      OPENCLAW_DEFAULT_MODEL: ${OPENCLAW_DEFAULT_MODEL:-bailian/qwen3-coder-next}
-      # Allow unconfigured mode (no ~/.openclaw mount needed)
-      OPENCLAW_GATEWAY_ALLOW_UNCONFIGURED: "true"
-      # Control UI for non-loopback access
-      OPENCLAW_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK: "true"
-    volumes:
-      # Independent config volume - DOES NOT touch host ~/.openclaw
-      - openclaw-gateway-config:/home/node/.openclaw
-    ports:
-      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
-      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
-    init: true
-    restart: unless-stopped
-    command:
-      [
-        "node",
-        "dist/index.js",
-        "gateway",
-        "--allow-unconfigured",
-        "--bind",
-        "${OPENCLAW_GATEWAY_BIND:-lan}",
-        "--port",
-        "18789",
-      ]
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
-    networks:
-      - openclaw-voice-network
-
-  # ===========================================
-  # OpenClaw CLI (Shares network with Gateway)
-  # ===========================================
-  openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
-    network_mode: "service:openclaw-gateway"
-    cap_drop:
-      - NET_RAW
-      - NET_ADMIN
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      HOME: /home/node
-      TERM: xterm-256color
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
-      BROWSER: echo
-      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
-    stdin_open: true
-    tty: true
-    init: true
-    entrypoint: ["node", "dist/index.js"]
-    depends_on:
-      - openclaw-gateway
-
-  # ===========================================
   # OpenClaw Voice (Bailian STT/TTS)
-  # Built from local source code
+  # Connects to external Gateway
   # ===========================================
   openclaw-voice:
     build:
@@ -103,20 +27,22 @@ services:
       # Bailian API (STT + TTS)
       - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-YOUR_BAILIAN_API_KEY}
       # STT Configuration
-      - OPENCLAW_STT_MODEL=qwen3-asr-flash
-      - OPENCLAW_STT_LANGUAGE=zh
+      - OPENCLAW_STT_MODEL=${OPENCLAW_STT_MODEL:-qwen3-asr-flash}
+      - OPENCLAW_STT_LANGUAGE=${OPENCLAW_STT_LANGUAGE:-zh}
       # TTS Configuration
-      - OPENCLAW_TTS_MODEL=qwen3-tts-flash
-      - OPENCLAW_TTS_VOICE=Cherry
-      - OPENCLAW_TTS_LANGUAGE=Chinese
-      # Gateway Connection (same network, use service name)
-      - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
+      - OPENCLAW_TTS_MODEL=${OPENCLAW_TTS_MODEL:-qwen3-tts-flash}
+      - OPENCLAW_TTS_VOICE=${OPENCLAW_TTS_VOICE:-Cherry}
+      - OPENCLAW_TTS_LANGUAGE=${OPENCLAW_TTS_LANGUAGE:-Chinese}
+      # Gateway Connection (via host network)
+      - OPENCLAW_GATEWAY_URL=http://host.docker.internal:${OPENCLAW_GATEWAY_PORT:-26523}
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-YOUR_GATEWAY_TOKEN}
     ports:
       - "${OPENCLAW_VOICE_PORT:-8765}:8765"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
-      openclaw-gateway:
-        condition: service_healthy
+      openclaw-gateway-check:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/"]
@@ -125,12 +51,32 @@ services:
       retries: 3
       start_period: 30s
     networks:
-      - openclaw-voice-network
+      - openclaw-network
+
+  # ===========================================
+  # Gateway Health Check (one-shot)
+  # Waits for Gateway to be ready before Voice starts
+  # ===========================================
+  openclaw-gateway-check:
+    image: alpine:latest
+    command: >
+      sh -c "
+      echo 'Waiting for Gateway at host.docker.internal:${OPENCLAW_GATEWAY_PORT:-26523}...' &&
+      for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+        if wget -q --spider http://host.docker.internal:${OPENCLAW_GATEWAY_PORT:-26523}/healthz 2>/dev/null; then
+          echo '✅ Gateway is ready!' && exit 0;
+        fi;
+        echo \"Attempt $$i: Gateway not ready, waiting...\";
+        sleep 5;
+      done &&
+      echo '❌ Gateway not available after 60 seconds' && exit 1
+      "
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - openclaw-network
 
 networks:
-  openclaw-voice-network:
-    driver: bridge
-
-volumes:
-  # Independent Gateway config volume - DOES NOT touch host ~/.openclaw
-  openclaw-gateway-config:
+  openclaw-network:
+    external: true
+    name: ${OPENCLAW_NETWORK_NAME:-openclaw_default}
