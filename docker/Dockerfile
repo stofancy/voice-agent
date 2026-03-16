@@ -1,26 +1,6 @@
 # Voice Agent Plugin - Custom OpenClaw Image
 FROM ghcr.io/openclaw/openclaw:latest
 
-# 代理配置（带默认值）
-# 注意：ghcr.io 和 npmjs.org 需要直连（代理不支持 HTTPS）
-ARG HTTP_PROXY=http://192.168.0.147:7890
-ARG HTTPS_PROXY=http://192.168.0.147:7890
-ARG NO_PROXY=ghcr.io,npmjs.org,registry.npmjs.org,localhost,127.0.0.1,.local
-
-# 打印代理配置（调试用）
-RUN echo "=== Build Time Proxy Config ===" && \
-    echo "HTTP_PROXY=$HTTP_PROXY" && \
-    echo "HTTPS_PROXY=$HTTPS_PROXY" && \
-    echo "NO_PROXY=$NO_PROXY"
-
-# 设置构建时环境变量
-ENV HTTP_PROXY=$HTTP_PROXY
-ENV HTTPS_PROXY=$HTTPS_PROXY
-ENV NO_PROXY=$NO_PROXY
-ENV http_proxy=$HTTP_PROXY
-ENV https_proxy=$HTTPS_PROXY
-ENV no_proxy=$NO_PROXY
-
 # 使用 root 用户安装插件
 USER root
 
@@ -31,22 +11,10 @@ RUN mkdir -p /home/node/.openclaw/extensions && \
 # 复制插件源代码
 COPY packages/server /tmp/voice-agent-src
 
-# 配置 npm 代理（npm 使用小写环境变量）
+# 安装插件依赖并编译
 WORKDIR /tmp/voice-agent-src
-RUN echo "=== npm proxy config ===" && \
-    echo "Using proxy: $http_proxy" && \
-    echo "NO_PROXY: $no_proxy" && \
-    npm config set proxy "$http_proxy" && \
-    npm config set https-proxy "$https_proxy" && \
-    npm config set strict-ssl false && \
-    npm config set registry https://registry.npmjs.org/ && \
-    echo "=== npm config list ===" && \
-    npm config list
-
-# 安装插件依赖并编译（带详细日志）
 RUN echo "=== npm install start ===" && \
-    echo "Proxy: $http_proxy, NO_PROXY: $no_proxy" && \
-    npm install --omit=dev --loglevel verbose 2>&1 && \
+    npm install --omit=dev 2>&1 && \
     echo "=== npm build start ===" && \
     npm run build 2>&1 && \
     echo "=== copy files ===" && \
