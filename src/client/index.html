@@ -458,16 +458,48 @@
                     bytes[i] = binaryString.charCodeAt(i);
                 }
                 
+                // Check if WAV file (has RIFF header)
+                let audioData = bytes;
+                let actualSampleRate = sampleRate;
+                
+                // Check for RIFF header (WAV file)
+                if (bytes.length > 44 && 
+                    bytes[0] === 0x52 && bytes[1] === 0x49 &&  // 'R'
+                    bytes[2] === 0x46 && bytes[3] === 0x46 &&  // 'I'
+                    bytes[8] === 0x57 && bytes[9] === 0x41 &&  // 'W'
+                    bytes[10] === 0x56 && bytes[11] === 0x45) { // 'A'
+                    console.log('🎵 Detected WAV file, parsing header...');
+                    
+                    // Parse WAV header to get actual sample rate
+                    // Bytes 24-27 contain the sample rate
+                    actualSampleRate = bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 16);
+                    console.log('🎵 WAV sample rate:', actualSampleRate);
+                    
+                    // Find data chunk (starts at byte 36 typically)
+                    let dataStart = 44;
+                    for (let i = 44; i < bytes.length - 8; i++) {
+                        if (bytes[i] === 0x64 && bytes[i+1] === 0x61 &&  // 'da'
+                            bytes[i+2] === 0x74 && bytes[i+3] === 0x61) { // 'ta'
+                            dataStart = i + 8;
+                            break;
+                        }
+                    }
+                    
+                    // Skip WAV header
+                    audioData = bytes.slice(dataStart);
+                    console.log('🎵 Audio data length:', audioData.length, 'bytes');
+                }
+                
                 // Convert to Int16 then Float32
-                const int16 = new Int16Array(bytes.buffer);
+                const int16 = new Int16Array(audioData.buffer);
                 const float32 = new Float32Array(int16.length);
                 for (let i = 0; i < int16.length; i++) {
                     float32[i] = int16[i] / 32768.0;
                 }
                 
                 // Create audio buffer and play
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate });
-                const buffer = audioCtx.createBuffer(1, float32.length, sampleRate);
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: actualSampleRate });
+                const buffer = audioCtx.createBuffer(1, float32.length, actualSampleRate);
                 buffer.copyToChannel(float32, 0);
                 
                 const source = audioCtx.createBufferSource();
