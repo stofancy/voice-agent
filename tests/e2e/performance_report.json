@@ -1,187 +1,31 @@
 {
-  "generated_at": "2026-03-17T08:53:44Z",
+  "generated_at": "2026-03-17T09:08:17Z",
   "metrics": {
     "llm_ttft_ms": {
-      "count": 7,
-      "min_ms": 324.7,
-      "max_ms": 1940.2,
-      "avg_ms": 879.2,
+      "count": 1,
+      "min_ms": 1434.6,
+      "max_ms": 1434.6,
+      "avg_ms": 1434.6,
       "samples_ms": [
-        1029.7,
-        736.5,
-        1008.2,
-        1940.2,
-        786.0,
-        329.0,
-        324.7
+        1434.6
       ]
     },
     "llm_first_sentence_ms": {
-      "count": 4,
-      "min_ms": 739.5,
-      "max_ms": 2200.7,
-      "avg_ms": 1277.8,
+      "count": 1,
+      "min_ms": 1436.4,
+      "max_ms": 1436.4,
+      "avg_ms": 1436.4,
       "samples_ms": [
-        1032.9,
-        739.5,
-        1138.0,
-        2200.7
+        1436.4
       ]
     },
     "llm_total_ms": {
-      "count": 4,
-      "min_ms": 913.8,
-      "max_ms": 2217.3,
-      "avg_ms": 1415.1,
-      "samples_ms": [
-        1175.9,
-        913.8,
-        1353.7,
-        2217.3
-      ]
-    },
-    "llm_tokens_per_sec": {
-      "count": 4,
-      "min_ms": 405.9,
-      "max_ms": 1011.9,
-      "avg_ms": 775.8,
-      "samples_ms": [
-        812.6,
-        405.9,
-        1011.9,
-        872.8
-      ]
-    },
-    "pipeline_stt_latency_ms": {
-      "count": 4,
-      "min_ms": 1132.6,
-      "max_ms": 1397.1,
-      "avg_ms": 1243.1,
-      "samples_ms": [
-        1220.6,
-        1132.6,
-        1222.1,
-        1397.1
-      ]
-    },
-    "pipeline_llm_ttft_ms": {
-      "count": 4,
-      "min_ms": 809.3,
-      "max_ms": 987.4,
-      "avg_ms": 876.2,
-      "samples_ms": [
-        809.6,
-        809.3,
-        987.4,
-        898.4
-      ]
-    },
-    "pipeline_tts_ttfa_ms": {
-      "count": 4,
-      "min_ms": 905.4,
-      "max_ms": 956.8,
-      "avg_ms": 934.6,
-      "samples_ms": [
-        956.8,
-        905.4,
-        944.8,
-        931.2
-      ]
-    },
-    "pipeline_total_ttfa_ms": {
-      "count": 4,
-      "min_ms": 2847.4,
-      "max_ms": 3226.6,
-      "avg_ms": 3053.8,
-      "samples_ms": [
-        2987.0,
-        2847.4,
-        3154.4,
-        3226.6
-      ]
-    },
-    "stt_latency_ms": {
-      "count": 4,
-      "min_ms": 1223.4,
-      "max_ms": 1353.5,
-      "avg_ms": 1268.8,
-      "samples_ms": [
-        1260.3,
-        1237.8,
-        1223.4,
-        1353.5
-      ]
-    },
-    "stt_roundtrip_similarity": {
-      "count": 3,
-      "min_ms": 1000.0,
-      "max_ms": 1000.0,
-      "avg_ms": 1000.0,
-      "samples_ms": [
-        1000.0,
-        1000.0,
-        1000.0
-      ]
-    },
-    "tts_ttfa_ms": {
-      "count": 4,
-      "min_ms": 868.3,
-      "max_ms": 950.9,
-      "avg_ms": 917.1,
-      "samples_ms": [
-        948.8,
-        950.9,
-        868.3,
-        900.4
-      ]
-    },
-    "tts_total_ms": {
-      "count": 4,
-      "min_ms": 1175.4,
-      "max_ms": 1436.6,
-      "avg_ms": 1364.2,
-      "samples_ms": [
-        1436.6,
-        1175.4,
-        1410.9,
-        1433.9
-      ]
-    },
-    "tts_stream_first_chunk_ms": {
       "count": 1,
-      "min_ms": 902.7,
-      "max_ms": 902.7,
-      "avg_ms": 902.7,
+      "min_ms": 1579.8,
+      "max_ms": 1579.8,
+      "avg_ms": 1579.8,
       "samples_ms": [
-        902.7
-      ]
-    },
-    "tts_stream_avg_gap_ms": {
-      "count": 1,
-      "min_ms": 59.0,
-      "max_ms": 59.0,
-      "avg_ms": 59.0,
-      "samples_ms": [
-        59.0
-      ]
-    },
-    "tts_rtf": {
-      "count": 1,
-      "min_ms": 431.1,
-      "max_ms": 431.1,
-      "avg_ms": 431.1,
-      "samples_ms": [
-        431.1
-      ]
-    },
-    "tts_voice_ttfa_ms": {
-      "count": 2,
-      "min_ms": 885.6,
-      "max_ms": 952.2,
-      "avg_ms": 918.9,
-      "samples_ms": [
-        885.6,
-        952.2
+        1579.8
       ]
     }
   }

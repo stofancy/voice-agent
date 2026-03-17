@@ -14,6 +14,8 @@ This measures the end-to-end latency from:
 The key metric: **Time from STT input to first TTS audio byte** —
 this is what the user perceives as response delay.
 
+All latency metrics are logged to tests/e2e/test_run.log in real-time.
+
 Run:
     ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_pipeline_e2e.py -v -s
 """
@@ -23,6 +25,7 @@ import time
 from typing import Tuple
 
 import pytest
+from loguru import logger
 
 from tests.e2e.conftest import (
     SCENARIOS,
@@ -42,19 +45,27 @@ async def _full_pipeline(
 
     Returns:
         (original_prompt, llm_response, stt_latency_ms, llm_ttft_ms, tts_ttfa_ms)
+    
+    Logs each stage for real-time pipeline monitoring.
     """
     # Load pre-recorded speech
+    logger.info(f"📦 Pipeline: Loading audio fixture from {prompt_audio_path}")
     audio, sr = read_wav_to_numpy(prompt_audio_path)
+    logger.debug(f"📦 Pipeline: Audio shape={audio.shape}, sr={sr}Hz")
 
     # ── STT ───────────────────────────────────────────────────────────────────
+    logger.info("📦 Pipeline: [1/3] STT - Transcribing audio...")
     t0 = time.perf_counter()
     stt_text, stt_ok = await stt_client.transcribe(audio, sample_rate=sr)
     stt_latency_ms = (time.perf_counter() - t0) * 1000
 
     if not stt_ok:
+        logger.error(f"📦 Pipeline: STT failed: {stt_text}")
         raise AssertionError(f"STT failed: {stt_text}")
+    logger.info(f"📦 Pipeline: STT complete in {stt_latency_ms:.0f}ms → {stt_text!r}")
 
     # ── LLM ────────────────────────────────────────────────────────────────────
+    logger.info("📦 Pipeline: [2/3] LLM - Generating response...")
     llm_text = ""
     llm_ttft_ms = 0.0
     t0 = time.perf_counter()
@@ -63,9 +74,13 @@ async def _full_pipeline(
         now_ms = (time.perf_counter() - t0) * 1000
         if not llm_text:
             llm_ttft_ms = now_ms
+            logger.info(f"📦 Pipeline: LLM first token at {llm_ttft_ms:.0f}ms")
         llm_text += chunk
 
+    logger.info(f"📦 Pipeline: LLM complete in {(time.perf_counter() - t0)*1000:.0f}ms → {llm_text[:80]!r}...")
+
     # ── TTS ────────────────────────────────────────────────────────────────────
+    logger.info("📦 Pipeline: [3/3] TTS - Synthesizing audio...")
     tts_pcm, tts_ttfa_ms, _ = await collect_tts_stream(tts_client, llm_text)
     assert tts_pcm, "TTS produced no audio"
 

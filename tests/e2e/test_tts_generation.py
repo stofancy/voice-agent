@@ -10,8 +10,10 @@ Tests Alibaba Bailian Qwen-TTS (qwen3-tts-flash) directly:
 - Tests all available voices
 - Validates output audio is non-empty and well-formed WAV
 
+All latency metrics are logged to tests/e2e/test_run.log in real-time.
+
 Run:
-    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_tts_generation.py -v
+    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_tts_generation.py -v -s
 """
 
 import asyncio
@@ -22,6 +24,7 @@ from typing import List
 
 import numpy as np
 import pytest
+from loguru import logger
 
 from tests.e2e.conftest import (
     SCENARIOS,
