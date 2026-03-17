@@ -4,7 +4,8 @@ Shared fixtures and utilities for E2E backend tests.
 All live tests require ALI_BAILIAN_API_KEY to be set:
   ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/ -v
 
-Fixtures are session-scoped so API clients are reused across the whole run.
+Fixtures are function-scoped to prevent aiohttp session closure.
+Logs are written to tests/e2e/test_run.log in real-time.
 """
 
 import asyncio
@@ -19,7 +20,28 @@ from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pytest
-from loguru import logger
+from loguru import logger as _base_logger
+
+# Configure loguru for file-based logging in real-time
+_log_dir = Path(__file__).parent
+_log_file = _log_dir / "test_run.log"
+
+# Remove default handler and add file handler
+_base_logger.remove()
+_base_logger.add(
+    sys.stderr,
+    level="DEBUG",
+    format="<level>{time:HH:mm:ss}</level> | <level>{level: <8}</level> | {message}",
+)
+_base_logger.add(
+    str(_log_file),
+    level="DEBUG",
+    format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}",
+    rotation="50 MB",  # rotate at 50MB
+    compression="zip",  # compress rotated files
+)
+
+logger = _base_logger
 
 # Make sure project root is importable
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -52,6 +74,8 @@ class LatencyTracker:
     """
     Thread-safe accumulator for latency measurements.
 
+    All measurements are logged to test_run.log in real-time for live monitoring.
+
     Usage::
 
         tracker.record("stt_latency", 420.3, scenario="short_zh")
@@ -62,10 +86,14 @@ class LatencyTracker:
 
     def __init__(self) -> None:
         self._records: List[_Record] = []
+        logger.info("=" * 80)
+        logger.info("OPENCLAW VOICE — E2E BACKEND PERFORMANCE TEST SESSION STARTED")
+        logger.info("=" * 80)
 
     def record(self, name: str, duration_ms: float, **metadata) -> None:
         self._records.append(_Record(name=name, duration_ms=duration_ms, metadata=metadata))
-        logger.debug(f"[PERF] {name}: {duration_ms:.1f} ms  {metadata}")
+        meta_str = " | ".join(f"{k}={v}" for k, v in metadata.items())
+        logger.info(f"⏱️  PERF: {name:30s} = {duration_ms:8.1f} ms  | {meta_str}")
 
     def summary(self) -> Dict:
         by_name: Dict[str, List[float]] = {}
@@ -85,15 +113,15 @@ class LatencyTracker:
     def print_report(self) -> None:
         summary = self.summary()
         sep = "─" * 72
-        print(f"\n{sep}")
-        print("  OPENCLAW VOICE — BACKEND PERFORMANCE REPORT")
-        print(sep)
+        logger.info(f"\n{sep}")
+        logger.info("  OPENCLAW VOICE — BACKEND PERFORMANCE REPORT")
+        logger.info(sep)
         col = "{:<36}  {:>9}  {:>9}  {:>9}  {:>5}"
-        print(col.format("Metric", "Min (ms)", "Avg (ms)", "Max (ms)", "N"))
-        print(sep)
+        logger.info(col.format("Metric", "Min (ms)", "Avg (ms)", "Max (ms)", "N"))
+        logger.info(sep)
         for name, s in sorted(summary.items()):
-            print(col.format(name, s["min_ms"], s["avg_ms"], s["max_ms"], s["count"]))
-        print(sep)
+            logger.info(col.format(name, s["min_ms"], s["avg_ms"], s["max_ms"], s["count"]))
+        logger.info(sep)
 
     def save_json(self, path: str) -> None:
         data = {
@@ -101,7 +129,8 @@ class LatencyTracker:
             "metrics": self.summary(),
         }
         Path(path).write_text(json.dumps(data, indent=2))
-        logger.info(f"Performance report written → {path}")
+        logger.info(f"\n✅ Performance report written → {path}")
+        logger.info(f"\n📊 For live logs during test execution, see → tests/e2e/test_run.log")
 
 
 # Module-level singleton – shared across all sessions
@@ -156,18 +185,26 @@ async def collect_tts_stream(
     ``(raw_pcm_bytes, first_chunk_ms, total_ms)``
 
     Measures wall-clock from the first API call to last byte received.
+    Logs each chunk arrival for fine-grained monitoring.
     """
     chunks: List[bytes] = []
     first_chunk_ms: Optional[float] = None
     t0 = time.perf_counter()
+    chunk_num = 0
 
+    logger.debug(f"🔊 TTS: Starting stream for text: {text[:60]!r}...")
     async for chunk in tts_client.synthesize(text, stream=True):
         elapsed_ms = (time.perf_counter() - t0) * 1000
+        chunk_num += 1
         if first_chunk_ms is None:
             first_chunk_ms = elapsed_ms
+            logger.info(f"🔊 TTS: First audio chunk arrived at {first_chunk_ms:.1f}ms")
         chunks.append(chunk)
+        logger.debug(f"🔊 TTS: Chunk #{chunk_num}: {len(chunk):,} bytes at {elapsed_ms:.1f}ms")
 
     total_ms = (time.perf_counter() - t0) * 1000
+    total_bytes = sum(len(c) for c in chunks)
+    logger.info(f"🔊 TTS: Complete in {total_ms:.1f}ms ({chunk_num} chunks, {total_bytes:,} bytes)")
     return b"".join(chunks), first_chunk_ms, total_ms
 
 
@@ -180,11 +217,15 @@ def latency_tracker() -> LatencyTracker:
 
 @pytest.fixture(scope="session", autouse=True)
 def save_report_on_exit(latency_tracker):
-    """After the full test session, write the JSON performance report."""
+    """After the full test session, write the JSON performance report and summary to logs."""
     yield
+    logger.info("\n" + "=" * 80)
+    logger.info("TEST SESSION COMPLETE - GENERATING FINAL REPORT")
+    logger.info("=" * 80)
     report_path = Path(__file__).parent / "performance_report.json"
     latency_tracker.print_report()
     latency_tracker.save_json(str(report_path))
+    logger.info("=" * 80)
 
 
 @pytest.fixture(scope="session")
@@ -217,6 +258,26 @@ async def tts_client(api_key):
 def stt_client(api_key):
     from src.server.bailian_stt import BailianSTT
     return BailianSTT(api_key=api_key, model="qwen3-asr-flash", language="zh")
+
+
+# ── Pytest hooks for test lifecycle logging ───────────────────────────────────
+
+def pytest_runtest_setup(item):
+    """Log when a test starts."""
+    logger.info(f"\n{'='*80}")
+    logger.info(f"▶️  TEST START: {item.nodeid}")
+    logger.info(f"{'='*80}")
+
+
+def pytest_runtest_logreport(report):
+    """Log test completion with pass/fail status and duration."""
+    if report.when == "call":  # Only log the actual test execution, not setup/teardown
+        if report.passed:
+            logger.info(f"✅ TEST PASSED: {report.nodeid} ({report.duration*1000:.0f}ms)")
+        elif report.failed:
+            logger.error(f"❌ TEST FAILED: {report.nodeid} ({report.duration*1000:.0f}ms)")
+        elif report.skipped:
+            logger.warning(f"⊘  TEST SKIPPED: {report.nodeid}")
 
 
 @pytest.fixture(scope="function")
