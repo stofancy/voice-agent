@@ -154,6 +154,15 @@ async def startup():
     logger.info("✅ OpenClaw Voice server (Bailian) ready!")
 
 
+@app.on_event("shutdown")
+async def shutdown():
+    """Release network resources on server stop."""
+    global backend
+    if backend:
+        await backend.close()
+        logger.info("✅ Backend connections closed")
+
+
 @app.get("/")
 @app.get("/voice")
 @app.get("/voice/")
