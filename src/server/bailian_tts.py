@@ -97,6 +97,7 @@ class BailianTTS:
                 headers["X-DashScope-SSE"] = "enable"
             
             logger.debug(f"🔊 TTS 请求：{text[:50]}...")
+            start_time = asyncio.get_event_loop().time()
             
             async with session.post(
                 self.api_url,
@@ -146,7 +147,11 @@ class BailianTTS:
                                     continue
                     
                     total_time = asyncio.get_event_loop().time() - start_time
-                    logger.info(f"🔊 TTS 流式完成：{audio_chunk_count} 块，{total_bytes} bytes, 总耗时 {total_time*1000:.1f}ms, 平均 {(total_time/audio_chunk_count)*1000:.1f}ms/块")
+                    avg_chunk_ms = (total_time / audio_chunk_count) * 1000 if audio_chunk_count else 0
+                    logger.info(
+                        f"🔊 TTS 流式完成：{audio_chunk_count} 块，{total_bytes} bytes, "
+                        f"总耗时 {total_time*1000:.1f}ms, 平均 {avg_chunk_ms:.1f}ms/块"
+                    )
                 else:
                     # 非流式：获取完整音频 URL
                     result = await response.json()
