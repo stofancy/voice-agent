@@ -3,9 +3,12 @@
         this.messagesContainer = document.getElementById('messagesContainer');
         this.userSpeakingIndicator = document.getElementById('userSpeakingIndicator');
         this.topBar = document.getElementById('topBar');
+        this.historyBtn = document.getElementById('historyBtn');
 
         this.lastScrollTop = 0;
+        this.historyCollapsed = false;
         this._bindScrollBehavior();
+        this._bindHistoryToggle();
     }
 
     UIController.prototype._bindScrollBehavior = function () {
@@ -14,6 +17,16 @@
             const scrollingDown = top > this.lastScrollTop;
             this.topBar.classList.toggle('hidden', scrollingDown && top > 30);
             this.lastScrollTop = top;
+        });
+    };
+
+    UIController.prototype._bindHistoryToggle = function () {
+        if (!this.historyBtn) return;
+
+        this.historyBtn.addEventListener('click', () => {
+            this.historyCollapsed = !this.historyCollapsed;
+            this.messagesContainer.classList.toggle('history-collapsed', this.historyCollapsed);
+            this.historyBtn.classList.toggle('active', this.historyCollapsed);
         });
     };
 
