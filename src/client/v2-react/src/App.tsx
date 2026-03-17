@@ -109,6 +109,22 @@ function App() {
         break;
       case 'audio_response':
         // Legacy format compatibility (v1 old format)
+        // Play audio data and auto-start listening if continuousMode is enabled
+        if (msg.data) {
+          // Audio playback would be handled by a PCMPlayer or similar
+          // For now, just trigger continuous mode logic
+          if (continuousMode && !isRecordingRef.current) {
+            setTimeout(() => {
+              startAudioCapture().then(success => {
+                if (success) {
+                  setIsRecording(true);
+                  isRecordingRef.current = true;
+                  sendMessage('start_listening');
+                }
+              });
+            }, 500);
+          }
+        }
         break;
       default:
         break;
