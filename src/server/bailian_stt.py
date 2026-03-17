@@ -72,8 +72,15 @@ class BailianSTT:
         try:
             # 重采样到 16kHz（如果前端不是 16kHz）
             if sample_rate != 16000:
-                import librosa
-                audio_data = librosa.resample(audio_data, orig_sr=sample_rate, target_sr=16000)
+                # Use scipy for resampling (librosa not always installed)
+                try:
+                    from scipy import signal
+                    num_samples = int(len(audio_data) * 16000 / sample_rate)
+                    audio_data = signal.resample(audio_data, num_samples)
+                except ImportError:
+                    # Fallback: simple nearest-neighbor resampling
+                    ratio = 16000 / sample_rate
+                    audio_data = audio_data[::int(1/ratio)] if ratio < 1 else np.repeat(audio_data, int(ratio))
                 sample_rate = 16000
                 logger.debug(f"🔄 重采样到 16kHz (原始：{sample_rate}Hz)")
             
