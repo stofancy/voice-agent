@@ -5,6 +5,7 @@ import { DestinationCardCompact } from './DestinationCard';
 import { HotelCard } from './HotelCard';
 import { FlightCard } from './FlightCard';
 import { useRef, useState } from 'react';
+import { renderMarkdownSafe } from '@/lib/markdown';
 
 interface ContentPanelProps {
   message: Message | null;
@@ -171,7 +172,10 @@ export function ContentPanel({ message, onClose, visible }: ContentPanelProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
               >
-                <p className="text-white/80 text-sm leading-relaxed">{message.content}</p>
+                <div 
+                  className="text-white/80 text-sm leading-relaxed markdown-content"
+                  dangerouslySetInnerHTML={{ __html: renderMarkdownSafe(message.content) }}
+                />
               </motion.div>
             )}
           </div>
