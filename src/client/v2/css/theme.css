@@ -1,0 +1,21 @@
+:root {
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.14);
+}
+
+.conversation-area,
+.top-bar,
+.message-content {
+    backdrop-filter: blur(10px);
+}
+
+.messages-container.history-collapsed .message:nth-last-child(n + 5) {
+    opacity: 0.5;
+    max-height: 54px;
+    overflow: hidden;
+}
+
+.history-btn.active {
+    border: 1px solid var(--accent-primary);
+    box-shadow: 0 0 0 2px rgba(0, 212, 255, 0.2);
+}
