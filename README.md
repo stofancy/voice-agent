@@ -13,8 +13,8 @@ Talk to your AI like you talk to Alexa — but self-hosted, private, and connect
 
 | Feature | Description |
 |---------|-------------|
-| 🎤 **Local STT** | Whisper runs locally via faster-whisper. Your voice never leaves your machine. |
-| 🔊 **Streaming TTS** | ElevenLabs with sentence-by-sentence streaming. Hear responses while they generate. |
+| 🎤 **Cloud STT** | Alibaba Bailian Qwen-ASR (`qwen3-asr-flash`) for fast speech recognition. |
+| 🔊 **Streaming TTS** | Alibaba Bailian Qwen-TTS (`qwen3-tts-flash`) with chunked playback. |
 | 🎯 **Voice Activity Detection** | Silero VAD filters background noise. Works in noisy environments. |
 | 🧹 **Smart Text Cleaning** | Strips markdown, hashtags, URLs before TTS. No more "hash hash". |
 | 🔌 **Any AI Backend** | OpenAI, Claude, or full OpenClaw agent with memory and tools. |
@@ -56,7 +56,7 @@ git clone https://github.com/Purple-Horizons/openclaw-voice.git && \
 cd openclaw-voice && \
 python3 -m venv .venv && source .venv/bin/activate && \
 pip install -r requirements.txt torch torchaudio && \
-PYTHONPATH=. ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" OPENAI_API_KEY="$OPENAI_API_KEY" \
+PYTHONPATH=. ALI_BAILIAN_API_KEY="$ALI_BAILIAN_API_KEY" OPENAI_API_KEY="$OPENAI_API_KEY" \
   nohup python -m src.server.main > /tmp/voice-server.log 2>&1 &
 ```
 
@@ -66,37 +66,16 @@ PYTHONPATH=. ELEVENLABS_API_KEY="$ELEVENLABS_API_KEY" OPENAI_API_KEY="$OPENAI_AP
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `ELEVENLABS_API_KEY` | Yes* | — | ElevenLabs API key for TTS |
-| `OPENAI_API_KEY` | Yes* | — | OpenAI API key (if not using gateway) |
+| `ALI_BAILIAN_API_KEY` | Yes* | — | Bailian API key for STT/TTS |
 | `OPENCLAW_GATEWAY_URL` | No | — | OpenClaw gateway URL for full agent |
 | `OPENCLAW_GATEWAY_TOKEN` | No | — | Gateway auth token |
 | `OPENCLAW_PORT` | No | `8765` | Server port |
-| `OPENCLAW_STT_MODEL` | No | `base` | Whisper model size |
-| `OPENCLAW_STT_DEVICE` | No | `auto` | Device: `auto`, `cpu`, `cuda`, `mps` |
+| `OPENCLAW_STT_MODEL` | No | `qwen3-asr-flash` | Bailian STT model |
+| `OPENCLAW_TTS_MODEL` | No | `qwen3-tts-flash` | Bailian TTS model |
+| `OPENCLAW_TTS_VOICE` | No | `Cherry` | Bailian TTS voice |
 | `OPENCLAW_REQUIRE_AUTH` | No | `false` | Require API keys for clients |
 
-*One of `OPENAI_API_KEY` or `OPENCLAW_GATEWAY_URL` required.
-
-### Whisper Model Sizes
-
-| Model | Speed | Quality | VRAM | Best For |
-|-------|-------|---------|------|----------|
-| `tiny` | Fastest | Fair | ~400MB | Quick testing |
-| `base` | Fast | Good | ~1GB | **Default. Good balance.** |
-| `small` | Medium | Better | ~2GB | Clearer transcription |
-| `medium` | Slower | Great | ~5GB | Accuracy priority |
-| `large-v3-turbo` | Slow | Best | ~6GB | Maximum accuracy |
-
-### TTS Options
-
-| Backend | Type | Quality | Latency | Notes |
-|---------|------|---------|---------|-------|
-| **ElevenLabs** | Cloud | Excellent | ~500ms | Default. Streaming supported. |
-| Chatterbox | Local | Very Good | ~1s | MIT license, voice cloning |
-| XTTS-v2 | Local | Excellent | ~1s | Voice cloning supported |
-| Mock | Local | None | 0ms | For testing (silence) |
-
-ElevenLabs uses `eleven_turbo_v2_5` for fastest response.
+*One of `ALI_BAILIAN_API_KEY` or (`OPENCLAW_GATEWAY_URL` + `OPENCLAW_GATEWAY_TOKEN`) is required.
 
 ## OpenClaw Gateway Integration
 
@@ -106,7 +85,7 @@ Connect to your full OpenClaw agent (same memory, tools, and persona as text cha
 # .env
 OPENCLAW_GATEWAY_URL=http://localhost:18789
 OPENCLAW_GATEWAY_TOKEN=your-token
-ELEVENLABS_API_KEY=your-key
+ALI_BAILIAN_API_KEY=your-key
 ```
 
 Add to your `openclaw.json`:
@@ -139,7 +118,7 @@ Add to your `openclaw.json`:
 │   Browser   │◄────────────►│          Voice Server               │
 │  (mic/spk)  │               │                                     │
 └─────────────┘               │  ┌─────────┐  ┌─────┐  ┌─────────┐ │
-                              │  │ Whisper │→│ AI  │→│ElevenLabs│ │
+                              │  │Bailian │→│ AI  │→│Bailian  │ │
                               │  │  (STT)  │  │     │  │  (TTS)  │ │
                               │  └─────────┘  └─────┘  └─────────┘ │
                               │       ↑                     │      │
@@ -148,7 +127,7 @@ Add to your `openclaw.json`:
 ```
 
 **Streaming Flow:**
-1. User speaks → Whisper transcribes locally
+1. User speaks → Bailian STT transcribes audio
 2. AI responds (streamed) → buffer sentences
 3. First sentence complete → TTS starts immediately
 4. Audio streams to browser while AI continues
@@ -206,8 +185,8 @@ Connect to `ws://localhost:8765/ws`:
 ## Roadmap
 
 - [x] WebSocket voice gateway
-- [x] Whisper STT (local)
-- [x] ElevenLabs TTS
+- [x] Bailian STT (Qwen-ASR)
+- [x] Bailian TTS (Qwen-TTS)
 - [x] Streaming TTS (sentence-by-sentence)
 - [x] Voice Activity Detection (Silero)
 - [x] Text cleaning (markdown/hashtags/URLs)
@@ -223,8 +202,7 @@ MIT License — see [LICENSE](LICENSE).
 
 ## Credits
 
-- [faster-whisper](https://github.com/guillaumekln/faster-whisper) — Local STT
-- [ElevenLabs](https://elevenlabs.io) — Text-to-Speech
+- [Alibaba Bailian](https://www.aliyun.com/product/bailian) — STT and TTS APIs
 - [Silero VAD](https://github.com/snakers4/silero-vad) — Voice Activity Detection
 - Built for [OpenClaw](https://openclaw.ai)
 

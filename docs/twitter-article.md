@@ -9,8 +9,8 @@
 Voice AI is everywhere—Alexa, Siri, Google Assistant—but they're all locked ecosystems. Want to talk to YOUR AI? The one you've customized? The one with YOUR context?
 
 You've got two options:
-1. **Pay $0.08-0.15/minute** for hosted voice AI (ElevenLabs Agents, Retell.ai)
-2. **Spend 3 days** configuring WebRTC, Whisper, VAD, and a dozen other acronyms
+1. **Pay recurring hosted voice fees** for managed voice AI platforms
+2. **Spend days** configuring WebRTC, STT, VAD, and TTS stacks by hand
 
 Neither is great.
 
@@ -18,8 +18,8 @@ Neither is great.
 
 **OpenClaw Voice** is a browser-based voice interface you can self-host in 5 minutes.
 
-- 🎤 **Local STT** — Whisper runs on YOUR machine. Your voice never leaves your server.
-- 🔊 **Premium TTS** — ElevenLabs integration for natural speech.
+- 🎤 **STT** — Bailian Qwen-ASR for low-latency transcription.
+- 🔊 **TTS** — Bailian Qwen-TTS streaming for natural playback.
 - 🌐 **Works in any browser** — Desktop, mobile, no app install.
 - 🔌 **Connect any AI** — OpenAI, Claude, or your own custom agent.
 - 🏠 **100% self-hosted** — Your data stays yours.
@@ -27,7 +27,7 @@ Neither is great.
 ## How It Works
 
 ```
-Browser → WebSocket → [Whisper STT] → [Your AI] → [ElevenLabs TTS] → Browser
+Browser → WebSocket → [Bailian STT] → [Your AI] → [Bailian TTS] → Browser
 ```
 
 That's it. Your voice gets transcribed locally, sent to your AI, and the response comes back as speech.
@@ -41,7 +41,7 @@ git clone https://github.com/Purple-Horizons/openclaw-voice.git
 cd openclaw-voice
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-ELEVENLABS_API_KEY="your-key" OPENAI_API_KEY="your-key" \
+ALI_BAILIAN_API_KEY="your-key" OPENAI_API_KEY="your-key" \
   python -m src.server.main
 ```
 
