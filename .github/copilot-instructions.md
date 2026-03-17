@@ -104,13 +104,14 @@ OPENCLAW_SUBTITLE_STREAMING=true                # Stream subtitles (WIP)
 
 **AI Backend**:
 ```env
-OPENCLAW_BACKEND_TYPE=openclaw                  # openclaw | openai | bailian
-OPENCLAW_BACKEND_MODEL=gpt-4o-mini              # Model name
 OPENCLAW_GATEWAY_URL=https://...                # OpenClaw Gateway URL
 OPENCLAW_GATEWAY_TOKEN=token                    # Gateway auth token
-OPENAI_API_KEY=sk-...                           # OpenAI fallback
 ALI_BAILIAN_API_KEY=your-bailian-key            # Alibaba Qwen access
 ```
+
+Runtime selection in current code:
+- If `OPENCLAW_GATEWAY_URL` and `OPENCLAW_GATEWAY_TOKEN` are set: use OpenClaw Gateway (`model="openclaw:main"`)
+- Otherwise: fallback to Bailian direct (`qwen-turbo` via DashScope compatible endpoint)
 
 ### Critical Files
 
@@ -349,8 +350,7 @@ OPENCLAW_REQUIRE_AUTH=true docker compose up -d
 
 Abstraction for different AI providers. Automatically selects:
 1. OpenClaw Gateway (if `OPENCLAW_GATEWAY_URL` + `OPENCLAW_GATEWAY_TOKEN`)
-2. OpenAI (if `OPENAI_API_KEY`)
-3. Bailian (if `ALI_BAILIAN_API_KEY`)
+2. Bailian direct fallback (if Gateway env vars are not set)
 
 All use OpenAI-compatible API format for consistency.
 
