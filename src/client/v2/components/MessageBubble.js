@@ -1,26 +1,24 @@
 (function () {
+    const renderers = {
+        text: (block) =>
+            window.TextBlock ? window.TextBlock(block.text || '') : `<p class="message-text">${window.SanitizeUtils.renderMarkdownLite(block.text || '')}</p>`,
+        image: (block) =>
+            window.ImageBlock ? window.ImageBlock(block.url, block.alt) : '',
+        link: (block) =>
+            window.LinkBlock ? window.LinkBlock(block.url, block.text) : '',
+        video: (block) =>
+            window.VideoBlock ? window.VideoBlock(block.url, block.title) : '',
+        html: (block) =>
+            window.HtmlBlock ? window.HtmlBlock(block.html) : `<div class="message-text">${window.SanitizeUtils.renderMarkdownLite(block.html || '')}</div>`,
+    };
+
     function renderBlock(block) {
         if (!block || typeof block !== 'object') {
             return '';
         }
 
-        switch (block.type) {
-            case 'text':
-                return `<p class="message-text">${window.SanitizeUtils.renderMarkdownLite(block.text || '')}</p>`;
-            case 'image':
-                if (!block.url) return '';
-                return `<img src="${window.SanitizeUtils.escapeHtml(block.url)}" alt="${window.SanitizeUtils.escapeHtml(block.alt || 'image')}" style="max-width:100%;border-radius:10px;" />`;
-            case 'link':
-                if (!block.url) return '';
-                return `<p class="message-text"><a href="${window.SanitizeUtils.escapeHtml(block.url)}" target="_blank" rel="noopener noreferrer">${window.SanitizeUtils.escapeHtml(block.text || block.url)}</a></p>`;
-            case 'video':
-                if (!block.url) return '';
-                return `<p class="message-text"><a href="${window.SanitizeUtils.escapeHtml(block.url)}" target="_blank" rel="noopener noreferrer">🎬 ${window.SanitizeUtils.escapeHtml(block.title || 'Video')}</a></p>`;
-            case 'html':
-                return `<div class="message-text">${window.SanitizeUtils.renderMarkdownLite(block.html || '')}</div>`;
-            default:
-                return '';
-        }
+        const renderer = renderers[block.type];
+        return renderer ? renderer(block) : '';
     }
 
     function createMessageElement(role, payload) {
@@ -40,10 +38,9 @@
             const html = payload.map(renderBlock).join('');
             content.insertAdjacentHTML('beforeend', html || '<p class="message-text"></p>');
         } else {
-            const textNode = document.createElement('p');
-            textNode.className = 'message-text';
-            textNode.innerHTML = window.SanitizeUtils.renderMarkdownLite(String(payload || ''));
-            content.appendChild(textNode);
+            const blocks = window.SanitizeUtils.parseTextToBlocks(String(payload || ''));
+            const html = blocks.map(renderBlock).join('');
+            content.insertAdjacentHTML('beforeend', html || '<p class="message-text"></p>');
         }
 
         message.appendChild(content);
