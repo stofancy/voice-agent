@@ -17,7 +17,6 @@ export function useAudioCapture({
   const streamRef = useRef<MediaStream | null>(null);
   const isRecordingRef = useRef(false);
   const lastSoundTimeRef = useRef(Date.now());
-  const silenceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const float32ToBase64 = useCallback((float32Array: Float32Array): string => {
     const bytes = new Uint8Array(float32Array.buffer);
@@ -103,11 +102,6 @@ export function useAudioCapture({
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
-    }
-
-    if (silenceTimerRef.current) {
-      clearTimeout(silenceTimerRef.current);
-      silenceTimerRef.current = null;
     }
   }, []);
 
