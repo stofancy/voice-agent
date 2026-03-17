@@ -3,9 +3,11 @@ AI Backend module - connects to OpenAI, OpenClaw gateway, or custom backends.
 """
 
 import asyncio
+import os
 from typing import Optional, List, Dict, AsyncGenerator
 
 from loguru import logger
+import httpx
 
 
 class AIBackend:
@@ -27,18 +29,32 @@ class AIBackend:
             "You are a helpful voice assistant. Keep responses concise and conversational. "
             "Aim for 1-2 sentences unless more detail is needed."
         )
+        self.request_timeout_s = float(os.getenv("OPENCLAW_BACKEND_TIMEOUT_S", "30"))
+        self.enable_http2 = os.getenv("OPENCLAW_BACKEND_HTTP2", "true").lower() == "true"
         self.conversation_history: List[Dict] = []
         self._client = None
+        self._http_client: Optional[httpx.AsyncClient] = None
         self._setup_client()
     
     def _setup_client(self):
         """Set up the API client."""
+        self._http_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.request_timeout_s, connect=5.0),
+            limits=httpx.Limits(
+                max_connections=50,
+                max_keepalive_connections=20,
+                keepalive_expiry=120.0,
+            ),
+            http2=self.enable_http2,
+        )
+
         if self.backend_type == "openai":
             try:
                 from openai import AsyncOpenAI
                 self._client = AsyncOpenAI(
                     api_key=self.api_key,
                     base_url=self.url if self.url != "https://api.openai.com/v1" else None,
+                    http_client=self._http_client,
                 )
                 logger.info(f"✅ OpenAI client ready (model: {self.model})")
             except ImportError:
@@ -50,6 +66,7 @@ class AIBackend:
                 self._client = AsyncOpenAI(
                     api_key=self.api_key,
                     base_url=self.url,
+                    http_client=self._http_client,
                 )
                 logger.info(f"✅ OpenClaw Gateway client ready (url: {self.url}, model: {self.model})")
             except ImportError:
@@ -165,3 +182,9 @@ class AIBackend:
     def clear_history(self):
         """Clear conversation history."""
         self.conversation_history = []
+
+    async def close(self):
+        """Close underlying network resources."""
+        if self._http_client:
+            await self._http_client.aclose()
+            self._http_client = None
