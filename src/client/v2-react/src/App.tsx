@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Settings, 
@@ -13,6 +13,7 @@ import { VoiceButton } from '@/components/VoiceButton';
 import { Waveform } from '@/components/Waveform';
 import { ContentPanel } from '@/components/ContentPanel';
 import { useVoiceInteraction } from '@/hooks/useVoiceInteraction';
+import { useAudioCapture } from '@/hooks/useAudioCapture';
 import './App.css';
 
 // Background images for carousel
@@ -30,8 +31,6 @@ function App() {
     currentMessage,
     showContent,
     subtitleEnabled,
-    startListening,
-    stopListening,
     toggleSubtitle,
     closeContent,
   } = useVoiceInteraction();
@@ -40,6 +39,146 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [autoPlay, setAutoPlay] = useState(true);
+  const [continuousMode, setContinuousMode] = useState(true);
+  const [isRecording, setIsRecording] = useState(false);
+
+  // WebSocket ref
+  const wsRef = useRef<WebSocket | null>(null);
+  const isAiSpeakingRef = useRef(false);
+  const isRecordingRef = useRef(false);
+
+  // Helper function to get API key from URL or localStorage
+  const getApiKey = useCallback(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('api_key') || localStorage.getItem('openclaw_api_key') || '';
+  }, []);
+
+  // WebSocket URL builder
+  const getWsUrl = useCallback(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const key = getApiKey();
+    const path = '/v2/ws';
+    if (key) {
+      return `${protocol}//${window.location.host}${path}?api_key=${encodeURIComponent(key)}`;
+    }
+    return `${protocol}//${window.location.host}${path}`;
+  }, [getApiKey]);
+
+  // Send message via WebSocket
+  const sendMessage = useCallback((type: string, data?: any) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type, ...data }));
+    }
+  }, []);
+
+  // Handle WebSocket messages
+  const handleWebSocketMessage = useCallback((msg: any) => {
+    switch (msg.type) {
+      case 'transcript':
+        // User transcript received
+        break;
+      case 'subtitle_chunk':
+        // Streaming subtitle text
+        break;
+      case 'audio_chunk':
+        // Audio data for TTS playback
+        break;
+      case 'tts_start':
+        isAiSpeakingRef.current = true;
+        break;
+      case 'tts_end':
+        isAiSpeakingRef.current = false;
+        // Continuous Mode: automatically start next round of listening
+        if (continuousMode && !isRecordingRef.current) {
+          setTimeout(() => {
+            startAudioCapture().then(success => {
+              if (success) {
+                setIsRecording(true);
+                isRecordingRef.current = true;
+                sendMessage('start_listening');
+              }
+            });
+          }, 300);
+        }
+        break;
+      case 'response_complete':
+        // Response complete
+        break;
+      case 'interrupt_complete':
+        isAiSpeakingRef.current = false;
+        break;
+      case 'audio_response':
+        // Legacy format compatibility (v1 old format)
+        break;
+      default:
+        break;
+    }
+  }, [continuousMode, sendMessage]);
+
+  // Audio capture hook
+  const { startRecording: startAudioCapture, stopRecording: stopAudioCapture } = useAudioCapture({
+    onAudioData: (base64Data: string) => {
+      sendMessage('audio', { data: base64Data });
+    },
+    onSilence: () => {
+      // VAD detected silence
+    },
+    silenceThreshold: 1500,
+  });
+
+  // Wrapper functions for VoiceButton
+  const handlePressStart = useCallback(async () => {
+    const success = await startAudioCapture();
+    if (success) {
+      setIsRecording(true);
+      isRecordingRef.current = true;
+      sendMessage('start_listening');
+    }
+  }, [startAudioCapture, sendMessage]);
+
+  const handlePressEnd = useCallback(() => {
+    stopAudioCapture();
+    setIsRecording(false);
+    isRecordingRef.current = false;
+    sendMessage('stop_listening');
+  }, [stopAudioCapture, sendMessage]);
+
+  // Initialize WebSocket connection
+  useEffect(() => {
+    const connect = () => {
+      wsRef.current = new WebSocket(getWsUrl());
+      
+      wsRef.current.onmessage = (event) => {
+        try {
+          handleWebSocketMessage(JSON.parse(event.data));
+        } catch (error) {
+          console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+      
+      wsRef.current.onclose = () => {
+        setTimeout(connect, 1500);
+      };
+      
+      wsRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+    };
+
+    connect();
+
+    // Ping interval to keep connection alive
+    const pingInterval = setInterval(() => {
+      sendMessage('ping');
+    }, 30000);
+
+    return () => {
+      clearInterval(pingInterval);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [getWsUrl, handleWebSocketMessage, sendMessage]);
 
   // Background carousel
   useEffect(() => {
@@ -184,9 +323,9 @@ function App() {
         {/* Voice Button */}
         <div className="absolute bottom-32">
           <VoiceButton
-            state={voiceState}
-            onPressStart={startListening}
-            onPressEnd={stopListening}
+            state={isAiSpeakingRef.current ? 'speaking' : isRecording ? 'listening' : 'idle'}
+            onPressStart={handlePressStart}
+            onPressEnd={handlePressEnd}
           />
         </div>
 
@@ -316,6 +455,27 @@ function App() {
                     <motion.div
                       className="absolute top-1 w-4 h-4 rounded-full bg-white"
                       animate={{ left: autoPlay ? '28px' : '4px' }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+                    />
+                  </button>
+                </div>
+
+                {/* Continuous Mode Toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="w-5 h-5 text-white/60" />
+                    <span className="text-white">连续对话模式</span>
+                  </div>
+                  <button
+                    onClick={() => setContinuousMode(!continuousMode)}
+                    className={`
+                      w-12 h-6 rounded-full transition-colors relative
+                      ${continuousMode ? 'bg-[#d4a853]' : 'bg-white/20'}
+                    `}
+                  >
+                    <motion.div
+                      className="absolute top-1 w-4 h-4 rounded-full bg-white"
+                      animate={{ left: continuousMode ? '28px' : '4px' }}
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                     />
                   </button>
