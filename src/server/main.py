@@ -60,15 +60,9 @@ class Settings(BaseSettings):
     tts_voice: str = "Cherry"  # 音色：Cherry, Bella, etc.
     tts_language: str = "Chinese"  # 合成语言
     
-    # AI Backend
-    backend_type: str = "openclaw"  # openclaw, openai, custom
-    backend_url: str = "https://api.openai.com/v1"
-    backend_model: str = "gpt-4o-mini"
-    openai_api_key: Optional[str] = None
-    
-    # OpenClaw Gateway (auto-detected from OPENCLAW_GATEWAY_URL + TOKEN)
-    openclaw_gateway_url: Optional[str] = None
-    openclaw_gateway_token: Optional[str] = None
+    # AI backend endpoint is selected at startup from environment variables:
+    # - OPENCLAW_GATEWAY_URL + OPENCLAW_GATEWAY_TOKEN -> OpenClaw Gateway
+    # - otherwise -> Bailian direct fallback
     
     # Audio
     sample_rate: int = 16000
