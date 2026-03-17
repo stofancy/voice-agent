@@ -9,12 +9,14 @@ Tests Alibaba Bailian Qwen-ASR (qwen3-asr-flash) directly:
 - Validates round-trip text accuracy (TTS → STT) using fuzzy matching
 - Tests with both Chinese and English audio
 
+All latency metrics are logged to tests/e2e/test_run.log in real-time.
+
 Depends on TTS fixture files in tests/e2e/fixtures/audio/.
 Run TTS tests first if fixtures are missing, or let the ``audio_fixtures``
 conftest fixture generate them automatically.
 
 Run:
-    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_stt_transcription.py -v
+    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_stt_transcription.py -v -s
 """
 
 import os
@@ -24,6 +26,7 @@ from typing import Tuple
 
 import numpy as np
 import pytest
+from loguru import logger
 
 from tests.e2e.conftest import (
     SCENARIOS,

@@ -10,10 +10,12 @@ Tests the AI backend (Alibaba Bailian Qwen-turbo via OpenAI-compatible API):
 - Tokens per second (throughput)
 - Full response latency
 
+All latency metrics are logged to tests/e2e/test_run.log in real-time.
+
 Scenarios cover short/medium, Chinese/English prompts.
 
 Run:
-    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_llm_streaming.py -v
+    ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/test_llm_streaming.py -v -s
 """
 
 import re
@@ -21,6 +23,7 @@ import time
 from typing import List, Tuple
 
 import pytest
+from loguru import logger
 
 from tests.e2e.conftest import SCENARIOS
 
@@ -48,20 +51,26 @@ async def _stream_to_completion(
     first_sentence_done = False
     token_count = 0
     t0 = time.perf_counter()
+    logger.debug(f"🤖 LLM: Starting stream for prompt: {prompt[:60]!r}...")
 
     async for chunk in llm_client.chat_stream(prompt):
         now_ms = (time.perf_counter() - t0) * 1000
         if not full_text:  # first chunk ever
             ttft_ms = now_ms
+            logger.info(f"🤖 LLM: First token at {ttft_ms:.1f}ms")
         full_text += chunk
         token_count += 1  # each yielded chunk ≈ 1 token
+        logger.debug(f"🤖 LLM: Token #{token_count} at {now_ms:.1f}ms: {chunk!r}")
         if not first_sentence_done and _SENTENCE_END.search(full_text):
             first_sentence_ms = now_ms
             first_sentence_done = True
+            logger.info(f"🤖 LLM: First sentence complete at {first_sentence_ms:.1f}ms")
 
     total_ms = (time.perf_counter() - t0) * 1000
     if not first_sentence_done:
         first_sentence_ms = total_ms  # no punctuation found – whole response is "first sentence"
+    
+    logger.info(f"🤖 LLM: Complete in {total_ms:.1f}ms ({token_count} tokens, {len(full_text)} chars)")
 
     return full_text, ttft_ms, first_sentence_ms, total_ms, token_count
 
