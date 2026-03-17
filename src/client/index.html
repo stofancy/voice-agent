@@ -458,36 +458,23 @@
                     bytes[i] = binaryString.charCodeAt(i);
                 }
                 
-                // Check if WAV file (has RIFF header)
+                // Audio format detection: Support both raw PCM (current) and WAV (future-proof)
+                // Current backend outputs: pcm_24000 (raw PCM, no header)
+                // This adds robustness for TTS service changes (e.g., ElevenLabs outputs WAV)
                 let audioData = bytes;
                 let actualSampleRate = sampleRate;
                 
-                // Check for RIFF header (WAV file)
+                // Simple WAV header check (RIFF header: "RIFFxxxxWAVE")
                 if (bytes.length > 44 && 
-                    bytes[0] === 0x52 && bytes[1] === 0x49 &&  // 'R'
-                    bytes[2] === 0x46 && bytes[3] === 0x46 &&  // 'I'
-                    bytes[8] === 0x57 && bytes[9] === 0x41 &&  // 'W'
-                    bytes[10] === 0x56 && bytes[11] === 0x45) { // 'A'
-                    console.log('🎵 Detected WAV file, parsing header...');
-                    
-                    // Parse WAV header to get actual sample rate
-                    // Bytes 24-27 contain the sample rate
-                    actualSampleRate = bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 16);
-                    console.log('🎵 WAV sample rate:', actualSampleRate);
-                    
-                    // Find data chunk (starts at byte 36 typically)
-                    let dataStart = 44;
-                    for (let i = 44; i < bytes.length - 8; i++) {
-                        if (bytes[i] === 0x64 && bytes[i+1] === 0x61 &&  // 'da'
-                            bytes[i+2] === 0x74 && bytes[i+3] === 0x61) { // 'ta'
-                            dataStart = i + 8;
-                            break;
-                        }
-                    }
-                    
-                    // Skip WAV header
-                    audioData = bytes.slice(dataStart);
-                    console.log('🎵 Audio data length:', audioData.length, 'bytes');
+                    bytes[0] === 0x52 && bytes[1] === 0x49 &&  // 'R' 'I'
+                    bytes[2] === 0x46 && bytes[3] === 0x46 &&  // 'F' 'F'
+                    bytes[8] === 0x57 && bytes[9] === 0x41 &&  // 'W' 'A'
+                    bytes[10] === 0x56 && bytes[11] === 0x45) { // 'V' 'E'
+                    // Extract sample rate from WAV header (bytes 24-27)
+                    actualSampleRate = bytes[24] | (bytes[25] << 8) | (bytes[26] << 16) | (bytes[27] << 24);
+                    // Skip 44-byte WAV header, use raw audio data
+                    audioData = bytes.slice(44);
+                    console.log(`🎵 WAV detected: ${actualSampleRate}Hz, ${audioData.length} bytes`);
                 }
                 
                 // Convert to Int16 then Float32
