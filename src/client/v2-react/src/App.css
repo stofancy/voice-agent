@@ -1,5 +1,81 @@
 /* App-specific styles */
 
+/* Transcript Box Styles */
+.transcript-box {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.transcript-box h3 {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.transcript-box .prose {
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.6;
+}
+
+.transcript-box .prose code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 0.85em;
+}
+
+.transcript-box .prose code.block {
+  display: block;
+  padding: 8px;
+  margin: 8px 0;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+}
+
+.transcript-box .prose a {
+  color: #d4a853;
+  text-decoration: none;
+}
+
+.transcript-box .prose a:hover {
+  text-decoration: underline;
+}
+
+.transcript-box .prose strong {
+  color: #fff;
+}
+
+.transcript-box .prose em {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Custom scrollbar for transcript box */
+.transcript-box::-webkit-scrollbar {
+  width: 6px;
+}
+
+.transcript-box::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+}
+
+.transcript-box::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+.transcript-box::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 /* Smooth transitions for all interactive elements */
 button, a {
   transition: all 0.2s ease;

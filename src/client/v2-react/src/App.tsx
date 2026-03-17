@@ -14,6 +14,7 @@ import { Waveform } from '@/components/Waveform';
 import { ContentPanel } from '@/components/ContentPanel';
 import { useVoiceInteraction } from '@/hooks/useVoiceInteraction';
 import { useAudioCapture } from '@/hooks/useAudioCapture';
+import { renderMarkdown } from '@/lib/markdown';
 import './App.css';
 
 // Background images for carousel
@@ -41,6 +42,16 @@ function App() {
   const [autoPlay, setAutoPlay] = useState(true);
   const [continuousMode, setContinuousMode] = useState(true);
   const [isRecording, setIsRecording] = useState(false);
+  
+  // Transcript history state
+  const [transcriptHistory, setTranscriptHistory] = useState<Array<{
+    role: 'user' | 'assistant';
+    text: string;
+    timestamp: number;
+  }>>([]);
+  
+  // Streaming subtitle state
+  const [streamingSubtitle, setStreamingSubtitle] = useState('');
 
   // WebSocket ref
   const wsRef = useRef<WebSocket | null>(null);
@@ -75,13 +86,24 @@ function App() {
   const handleWebSocketMessage = useCallback((msg: any) => {
     switch (msg.type) {
       case 'transcript':
-        // User transcript received
+        // User transcript received - add to history
+        if (msg.text) {
+          setTranscriptHistory(prev => [...prev, {
+            role: 'user',
+            text: msg.text,
+            timestamp: Date.now(),
+          }]);
+        }
         break;
       case 'subtitle_chunk':
-        // Streaming subtitle text
+        // Streaming subtitle text - update streaming state
+        if (msg.text) {
+          setStreamingSubtitle(prev => prev + msg.text);
+        }
         break;
       case 'audio_chunk':
-        // Audio data for TTS playback
+        // Audio data for TTS playback - handled by audioPlayback ref
+        // This will be connected to the audio playback system
         break;
       case 'tts_start':
         isAiSpeakingRef.current = true;
@@ -102,10 +124,19 @@ function App() {
         }
         break;
       case 'response_complete':
-        // Response complete
+        // Response complete - finalize streaming subtitle and add to history
+        if (streamingSubtitle) {
+          setTranscriptHistory(prev => [...prev, {
+            role: 'assistant',
+            text: streamingSubtitle,
+            timestamp: Date.now(),
+          }]);
+          setStreamingSubtitle('');
+        }
         break;
       case 'interrupt_complete':
         isAiSpeakingRef.current = false;
+        setStreamingSubtitle('');
         break;
       case 'audio_response':
         // Legacy format compatibility (v1 old format)
@@ -129,7 +160,7 @@ function App() {
       default:
         break;
     }
-  }, [continuousMode, sendMessage]);
+  }, [continuousMode, sendMessage, streamingSubtitle]);
 
   // Audio capture hook
   const { startRecording: startAudioCapture, stopRecording: stopAudioCapture } = useAudioCapture({
@@ -137,7 +168,13 @@ function App() {
       sendMessage('audio', { data: base64Data });
     },
     onSilence: () => {
-      // VAD detected silence
+      // VAD detected silence - auto stop in continuous mode
+      if (continuousMode && isRecordingRef.current) {
+        stopAudioCapture();
+        setIsRecording(false);
+        isRecordingRef.current = false;
+        sendMessage('stop_listening');
+      }
     },
     silenceThreshold: 1500,
   });
@@ -335,6 +372,64 @@ function App() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* Conversation History Box (transcript-box) */}
+        {transcriptHistory.length > 0 && (
+          <motion.div
+            className="absolute top-20 left-0 right-0 px-6 overflow-y-auto max-h-[40vh]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="max-w-2xl mx-auto">
+              <div className="transcript-box">
+                <h3 className="text-sm font-medium text-white/50 mb-3 uppercase tracking-wider">
+                  Conversation
+                </h3>
+                <div className="space-y-3">
+                  {transcriptHistory.map((item, index) => (
+                    <motion.div
+                      key={index}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.05 }}
+                      className={`p-3 rounded-lg ${
+                        item.role === 'user' 
+                          ? 'bg-orange-500/10 border border-orange-500/20' 
+                          : 'bg-blue-500/10 border border-blue-500/20'
+                      }`}
+                    >
+                      <p className={`text-sm ${
+                        item.role === 'user' ? 'text-orange-300' : 'text-blue-300'
+                      }`}>
+                        <strong>{item.role === 'user' ? 'You' : 'AI'}: </strong>
+                        <span 
+                          className={item.role === 'assistant' ? 'prose prose-invert prose-sm' : ''}
+                          dangerouslySetInnerHTML={{ 
+                            __html: item.role === 'assistant' ? renderMarkdown(item.text) : item.text 
+                          }}
+                        />
+                      </p>
+                    </motion.div>
+                  ))}
+                  {/* Streaming subtitle display */}
+                  {streamingSubtitle && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20"
+                    >
+                      <p className="text-sm text-blue-300">
+                        <strong>AI: </strong>
+                        <span dangerouslySetInnerHTML={{ __html: renderMarkdown(streamingSubtitle) }} />
+                      </p>
+                    </motion.div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Voice Button */}
         <div className="absolute bottom-32">
