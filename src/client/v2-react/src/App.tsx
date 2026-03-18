@@ -57,6 +57,11 @@ function App() {
   const wsRef = useRef<WebSocket | null>(null);
   const isAiSpeakingRef = useRef(false);
   const isRecordingRef = useRef(false);
+  
+  // Audio playback
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const audioQueueRef = useRef<Int16Array[]>([]);
+  const isPlayingRef = useRef(false);
 
   // Helper function to get API key from URL or localStorage
   const getApiKey = useCallback(() => {
@@ -78,6 +83,47 @@ function App() {
       return `${protocol}//${wsHost}${path}?api_key=${encodeURIComponent(key)}`;
     }
     return `${protocol}//${wsHost}${path}`;
+  }, []);
+
+  // Audio playback helper
+  const playAudioChunk = useCallback((base64Data: string, sampleRate: number) => {
+    try {
+      // Decode base64 to Int16Array
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const int16Data = new Int16Array(bytes.buffer);
+      
+      // Initialize AudioContext if needed
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: sampleRate,
+        });
+      }
+      
+      const audioCtx = audioContextRef.current;
+      
+      // Create audio buffer
+      const audioBuffer = audioCtx.createBuffer(1, int16Data.length, sampleRate);
+      const channelData = audioBuffer.getChannelData(0);
+      
+      // Convert Int16 to Float32 (-1 to 1)
+      for (let i = 0; i < int16Data.length; i++) {
+        channelData[i] = int16Data[i] / 32768.0;
+      }
+      
+      // Create source and play
+      const source = audioCtx.createBufferSource();
+      source.buffer = audioBuffer;
+      source.connect(audioCtx.destination);
+      source.start(0);
+      
+      console.log('[Audio] Playing chunk:', int16Data.length, 'samples at', sampleRate, 'Hz');
+    } catch (error) {
+      console.error('[Audio] Playback error:', error);
+    }
   }, []);
 
   // Send message via WebSocket
@@ -113,8 +159,10 @@ function App() {
         }
         break;
       case 'audio_chunk':
-        // Audio data for TTS playback - handled by audioPlayback ref
-        // This will be connected to the audio playback system
+        // Audio data for TTS playback
+        if (msg.data && msg.sample_rate) {
+          playAudioChunk(msg.data, msg.sample_rate);
+        }
         break;
       case 'tts_start':
         isAiSpeakingRef.current = true;
