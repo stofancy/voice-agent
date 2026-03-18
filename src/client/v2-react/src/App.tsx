@@ -243,18 +243,22 @@ function App() {
 
   // Wrapper functions for VoiceButton
   const handlePressStart = useCallback(async () => {
+    console.log('[App] handlePressStart called');
     // Clear previous subtitle before starting new conversation
     setStreamingSubtitle('');
     
     const success = await startAudioCapture();
+    console.log('[App] startAudioCapture result:', success);
     if (success) {
       setIsRecording(true);
       isRecordingRef.current = true;
       sendMessage('start_listening');
+      console.log('[App] Sent start_listening');
     }
   }, [startAudioCapture, sendMessage]);
 
   const handlePressEnd = useCallback(() => {
+    console.log('[App] handlePressEnd called, isRecording:', isRecordingRef.current);
     stopAudioCapture();
     setIsRecording(false);
     isRecordingRef.current = false;

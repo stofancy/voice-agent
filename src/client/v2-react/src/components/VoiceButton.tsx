@@ -14,6 +14,22 @@ export function VoiceButton({ state, onPressStart, onPressEnd, disabled }: Voice
   const isProcessing = state === 'processing';
   const isSpeaking = state === 'speaking';
   const isActive = isListening || isProcessing || isSpeaking;
+  
+  const handleMouseDown = () => {
+    console.log('[VoiceButton] onMouseDown');
+    if (!disabled && onPressStart) onPressStart();
+  };
+  
+  const handleMouseUp = () => {
+    console.log('[VoiceButton] onMouseUp');
+    if (!disabled && onPressEnd) onPressEnd();
+  };
+  
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    e.preventDefault();
+    console.log('[VoiceButton] onTouchEnd');
+    if (!disabled && onPressEnd) onPressEnd();
+  };
 
   return (
     <div className="relative flex items-center justify-center">
@@ -68,12 +84,12 @@ export function VoiceButton({ state, onPressStart, onPressEnd, disabled }: Voice
             ? 'linear-gradient(135deg, #d4a853 0%, #e07a5f 100%)'
             : 'linear-gradient(135deg, rgba(212, 168, 83, 0.9) 0%, rgba(224, 122, 95, 0.9) 100%)',
         }}
-        onMouseDown={!disabled ? onPressStart : undefined}
-        onMouseUp={!disabled ? onPressEnd : undefined}
-        onMouseLeave={!disabled && isListening ? onPressEnd : undefined}
-        onTouchStart={!disabled ? onPressStart : undefined}
-        onTouchEnd={!disabled ? onPressEnd : undefined}
-        onClick={!disabled ? onPressStart : undefined}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={!disabled && isListening ? handleMouseUp : undefined}
+        onTouchStart={handleMouseDown}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleMouseDown}
         whileHover={!disabled ? { scale: 1.05 } : {}}
         whileTap={!disabled ? { scale: 0.95 } : {}}
         animate={{
