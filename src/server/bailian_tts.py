@@ -149,7 +149,7 @@ class BailianTTS:
                                             
                                             yield decoded_audio
                                     else:
-                                        logger.warning(f"🔊 TTS 响应格式异常：缺少 audio 字段")
+                                        logger.warning(f"🔊 TTS 响应格式异常：缺少 audio 字段, chunk={json.dumps(chunk, ensure_ascii=False)[:500]}")
                                 except json.JSONDecodeError as e:
                                     logger.error(f"🔊 TTS JSON 解析失败：{e}")
                                     continue
