@@ -85,3 +85,36 @@ cd src/client/v2-react && npm run build
 - `docs/DEVELOPMENT.md` - Full development guide
 - `docs/AI_DEV_GUIDE.md` - AI assistant guidelines
 - `README.md` - Project overview
+
+---
+
+## 🤖 AI Assistant Integration
+
+### Other AI Tools
+
+This project supports multiple AI coding assistants:
+
+| AI Tool | Config File | Auto-Read |
+|---------|-------------|-----------|
+| **Claude Code** | `.claude/instructions.md` | ✅ |
+| **OpenClaw** | `.openclaw/skills/voice-agent-dev/SKILL.md` | ✅ |
+| **Cursor/OpenCode** | `docs/AI_DEV_GUIDE.md` | ✅ |
+| **All Tools** | `AI_GUIDE.md` (root) | ✅ |
+
+### Quick Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `./scripts/dev-all.sh` | Start all dev services |
+| `./scripts/dev-backend.sh` | Start backend only |
+| `./scripts/dev-frontend.sh` | Start frontend only |
+| `./scripts/deploy.sh` | Production deployment |
+| `./scripts/stop-all.sh` | Stop all services |
+
+### Port Allocation
+
+| Service | Dev | Prod |
+|---------|-----|------|
+| Backend | 8766 | 8765 |
+| Frontend | 5173 | 8764 |
+| Gateway | 26523 | 26523 |
