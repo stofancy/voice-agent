@@ -93,9 +93,11 @@ function App() {
 
   // Handle WebSocket messages
   const handleWebSocketMessage = useCallback((msg: any) => {
+    console.log('[App] Handling message type:', msg.type);
     switch (msg.type) {
       case 'transcript':
         // User transcript received - add to history
+        console.log('[App] Received transcript:', msg.text);
         if (msg.text) {
           setTranscriptHistory(prev => [...prev, {
             role: 'user',
@@ -206,6 +208,8 @@ function App() {
     setIsRecording(false);
     isRecordingRef.current = false;
     sendMessage('stop_listening');
+    console.log('[App] Sent stop_listening, waiting for response...');
+    // Don't close WebSocket - wait for transcript/response
   }, [stopAudioCapture, sendMessage]);
 
   // Initialize WebSocket connection
@@ -222,9 +226,20 @@ function App() {
       
       wsRef.current.onmessage = (event) => {
         try {
-          handleWebSocketMessage(JSON.parse(event.data));
+          const msg = JSON.parse(event.data);
+          console.log('[WebSocket] Received:', msg.type, msg.text ? `(text: ${msg.text.substring(0, 50)}...)` : '');
+          handleWebSocketMessage(msg);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
+        }
+      };
+      
+      wsRef.current.onclose = () => {
+        console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
+        // Don't auto-reconnect if we're waiting for a response
+        if (isRecordingRef.current) {
+          console.log('[WebSocket] Closed while recording, reconnecting...');
+          setTimeout(connect, 1500);
         }
       };
       
