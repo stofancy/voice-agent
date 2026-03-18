@@ -144,38 +144,19 @@ async def shutdown():
         logger.info("✅ Backend connections closed")
 
 
-@app.get("/")
-@app.get("/voice")
-@app.get("/voice/")
-async def index():
-    """Serve v1 demo page."""
-    return FileResponse("src/client/index.html")
-
-
-@app.get("/v2")
-@app.get("/v2/")
-async def index_v2():
-    """Serve v2 React demo page."""
-    return FileResponse("src/client/v2-react/dist/index.html")
-
-
-@app.get("/v2/assets/{path:path}")
-@app.get("/assets/{path:path}")
-async def serve_v2_assets(path: str):
-    """Serve v2 React static assets."""
-    asset_path = Path("src/client/v2-react/dist/assets") / path
-    if asset_path.exists():
-        return FileResponse(asset_path)
-    return {"error": "Asset not found"}
-
-
-@app.get("/favicon.svg")
-async def serve_favicon():
-    """Serve favicon."""
-    favicon_path = Path("src/client/v2-react/dist/favicon.svg")
-    if favicon_path.exists():
-        return FileResponse(favicon_path)
-    return {"error": "Favicon not found"}
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration."""
+    return {
+        "status": "healthy",
+        "service": "openclaw-voice-backend",
+        "version": "0.1.0",
+        "components": {
+            "stt": "ready" if stt else "not_ready",
+            "tts": "ready" if tts else "not_ready",
+            "backend": "ready" if backend else "not_ready",
+        }
+    }
 
 
 @app.post("/api/keys")
