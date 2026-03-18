@@ -93,12 +93,14 @@ async def startup():
         language=settings.stt_language,
     )
 
+    tts_instructions = os.getenv("OPENCLAW_TTS_INSTRUCTIONS")
     logger.info(f"Loading Bailian TTS: {settings.tts_model}")
     tts = BailianTTS(
         api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
         model=settings.tts_model,
         voice=settings.tts_voice,
         language_type=settings.tts_language,
+        instructions=tts_instructions,
     )
 
     gateway_url = os.getenv("OPENCLAW_GATEWAY_URL")

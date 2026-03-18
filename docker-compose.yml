@@ -111,6 +111,8 @@ services:
       - OPENCLAW_TTS_MODEL=${OPENCLAW_TTS_MODEL:-qwen3-tts-flash}
       - OPENCLAW_TTS_VOICE=${OPENCLAW_TTS_VOICE:-Cherry}
       - OPENCLAW_TTS_LANGUAGE=${OPENCLAW_TTS_LANGUAGE:-Chinese}
+      # TTS Voice Instructions (only for qwen3-tts-instruct-flash)
+      - OPENCLAW_TTS_INSTRUCTIONS=${OPENCLAW_TTS_INSTRUCTIONS:-}
       # Streaming Configuration
       - OPENCLAW_TTS_STREAMING=${OPENCLAW_TTS_STREAMING:-true}
       - OPENCLAW_SUBTITLE_STREAMING=${OPENCLAW_SUBTITLE_STREAMING:-true}

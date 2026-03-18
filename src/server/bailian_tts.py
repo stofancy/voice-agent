@@ -34,11 +34,13 @@ class BailianTTS:
         model: str = "qwen3-tts-flash",
         voice: str = "Cherry",
         language_type: str = "Chinese",
+        instructions: Optional[str] = None,
     ):
         self.api_key = api_key or os.environ.get("ALI_BAILIAN_API_KEY")
         self.model = model
         self.voice = voice
         self.language_type = language_type
+        self.instructions = instructions
         self._session: Optional[aiohttp.ClientSession] = None
         
         # 百炼 TTS API URL（北京地域）
@@ -47,7 +49,8 @@ class BailianTTS:
         if not self.api_key:
             raise ValueError("ALI_BAILIAN_API_KEY not set - TTS requires Bailian API key")
         else:
-            logger.info(f"✅ 百炼 TTS 就绪 (模型：{self.model}, 音色：{self.voice})")
+            instruct_info = f", 指令：{self.instructions[:30]}..." if self.instructions else ""
+            logger.info(f"✅ 百炼 TTS 就绪 (模型：{self.model}, 音色：{self.voice}{instruct_info})")
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """获取 HTTP 会话"""
@@ -77,13 +80,20 @@ class BailianTTS:
             session = await self._get_session()
             
             # 构建请求体
+            input_data = {
+                "text": text,
+                "voice": self.voice,
+                "language_type": self.language_type
+            }
+            
+            # 指令控制（仅 qwen3-tts-instruct-flash 支持）
+            if self.instructions:
+                input_data["instructions"] = self.instructions
+                input_data["optimize_instructions"] = True
+            
             payload = {
                 "model": self.model,
-                "input": {
-                    "text": text,
-                    "voice": self.voice,
-                    "language_type": self.language_type
-                }
+                "input": input_data
             }
             
             headers = {
