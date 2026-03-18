@@ -345,13 +345,13 @@ function App() {
 
     return () => {
       clearInterval(pingInterval);
-      // Close old WebSocket before creating new one
-      if (wsRef.current) {
-        wsRef.current.onclose = null; // Prevent cleanup on intentional close
-        wsRef.current.close();
-      }
+      // Don't close WebSocket - keep it alive for LLM response
+      // if (wsRef.current) {
+      //   wsRef.current.onclose = null;
+      //   wsRef.current.close();
+      // }
     };
-  }, [getWsUrl, handleWebSocketMessage, sendMessage]);
+  }, [getWsUrl]); // Only reconnect when URL changes
 
   // Background carousel
   useEffect(() => {

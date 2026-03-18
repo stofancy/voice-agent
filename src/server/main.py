@@ -127,10 +127,15 @@ async def startup():
         fallback_api_key = os.getenv("ALI_BAILIAN_API_KEY") or os.getenv("OPENAI_API_KEY") or "mock-key"
         if fallback_api_key == "mock-key":
             logger.warning("⚠️ No AI backend key found, using mock key for local/dev startup")
+        llm_model = os.getenv("OPENCLAW_LLM_MODEL", "bailian/qwen3-coder-next")
+        # Remove 'bailian/' prefix if present (OpenAI compatible mode)
+        if llm_model.startswith("bailian/"):
+            llm_model = llm_model[8:]
+        logger.info(f"🤖 LLM model: {llm_model}")
         backend = AIBackend(
             backend_type="openai",
             url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model="qwen-turbo",
+            model=llm_model,
             api_key=fallback_api_key,
         )
 
@@ -283,8 +288,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 logger.error(f"❌ Failed to send transcript: {e}")
                 raise
 
+            logger.info(f"📝 STT result: success={success}, transcript='{transcript[:100]}...' (len={len(transcript) if transcript else 0})")
+            
             if not transcript.strip() or not success:
-                logger.info("🛑 Empty transcript, stopping")
+                logger.warning("🛑 Empty transcript, stopping")
                 await send_listening_stopped_once()
                 return
 
