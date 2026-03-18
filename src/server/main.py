@@ -397,6 +397,15 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.debug(f"📨 Received: {msg_type}")
 
             if msg_type == "start_listening":
+                # 如果正在处理 STT，不取消任务，返回错误
+                if connection_state == "PROCESSING":
+                    logger.warning("⚠️ STT 处理中，忽略 start_listening")
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": "正在处理上一个请求，请稍候"
+                    })
+                    continue
+                
                 await cancel_response(send_interrupt_event=False)
                 audio_buffer = []
                 connection_state = "LISTENING"

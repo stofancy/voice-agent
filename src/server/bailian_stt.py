@@ -91,29 +91,37 @@ class BailianSTT:
             
             logger.debug(f"📤 发送 STT 请求，音频长度：{len(audio_data)} samples, {len(audio_data)/16000:.2f}s")
             
-            # 调用百炼 API
-            response = await self._client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
+            # 调用百炼 API（带超时）
+            import asyncio
+            try:
+                response = await asyncio.wait_for(
+                    self._client.chat.completions.create(
+                        model=self.model,
+                        messages=[
                             {
-                                "type": "input_audio",
-                                "input_audio": {
-                                    "data": data_uri
-                                }
+                                "role": "user",
+                                "content": [
+                                    {
+                                        "type": "input_audio",
+                                        "input_audio": {
+                                            "data": data_uri
+                                        }
+                                    }
+                                ]
                             }
-                        ]
-                    }
-                ],
-                extra_body={
-                    "asr_options": {
-                        "language": self.language,
-                        "enable_itn": True  # 逆文本标准化
-                    }
-                }
-            )
+                        ],
+                        extra_body={
+                            "asr_options": {
+                                "language": self.language,
+                                "enable_itn": True  # 逆文本标准化
+                            }
+                        }
+                    ),
+                    timeout=30.0  # 30 秒超时
+                )
+            except asyncio.TimeoutError:
+                logger.error("❌ STT 请求超时（30 秒）")
+                return "识别超时，请重试", False
             
             text = response.choices[0].message.content
             logger.info(f"🎤 STT 识别结果（原始）：{text}")
