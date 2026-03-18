@@ -13,6 +13,7 @@ import asyncio
 import base64
 import json
 import os
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -23,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic_settings import BaseSettings
 
+from . import perf_logger
 from .auth import APIKey, load_keys_from_env, token_manager
 from .backend import AIBackend
 from .bailian_stt import BailianSTT
@@ -259,19 +261,40 @@ async def websocket_endpoint(websocket: WebSocket):
     audio_buffer: list[np.ndarray] = []
     response_task: Optional[asyncio.Task] = None
 
+    last_perf_data: dict = {}
+    last_transcript: str = ""
+    last_response: str = ""
+
     async def send_listening_stopped_once():
         nonlocal connection_state
         await websocket.send_json({"type": "listening_stopped"})
         connection_state = "IDLE"
 
     async def run_turn(audio_data: np.ndarray):
-        nonlocal connection_state
+        nonlocal connection_state, last_transcript, last_response, last_perf_data
         tts_started = False
+
+        # Perf data dict, only populated when perf logging is enabled
+        perf_data: dict = {}
 
         try:
             connection_state = "PROCESSING"
+
+            # ── STT stage ──────────────────────────────────────────
+            if perf_logger.is_enabled():
+                t_start = time.perf_counter()
+
             transcript, success = await stt.transcribe(audio_data)
 
+            if perf_logger.is_enabled():
+                t_stt_end = time.perf_counter()
+                perf_data["stt_ms"] = (t_stt_end - t_start) * 1000
+                t_llm_first: Optional[float] = None
+                t_llm_end: Optional[float] = None
+                t_tts_first: Optional[float] = None
+                t_tts_end: Optional[float] = None
+
+            last_transcript = transcript
             await websocket.send_json(
                 {
                     "type": "transcript",
@@ -283,14 +306,25 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if not transcript.strip() or not success:
                 await send_listening_stopped_once()
+                if perf_logger.is_enabled():
+                    last_perf_data = perf_data
                 return
 
+            # ── LLM stage ───────────────────────────────────────────
             full_response = ""
             async for chunk in backend.chat_stream(transcript):
                 full_response += chunk
+                if perf_logger.is_enabled() and t_llm_first is None:
+                    t_llm_first = time.perf_counter()
+                    perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
                 if SUBTITLE_STREAMING:
                     await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
 
+            if perf_logger.is_enabled():
+                t_llm_end = time.perf_counter()
+                perf_data["llm_gen_ms"] = (t_llm_end - t_llm_first) * 1000
+
+            last_response = full_response
             if not SUBTITLE_STREAMING:
                 await websocket.send_json({"type": "response_chunk", "text": full_response})
 
@@ -299,18 +333,28 @@ async def websocket_endpoint(websocket: WebSocket):
             connection_state = "SPEAKING"
             await websocket.send_json({"type": "tts_start"})
 
+            # ── TTS stage ───────────────────────────────────────────
+            if perf_logger.is_enabled():
+                t_tts_first = None
+                t_tts_end = None
+
             tts_start_time = asyncio.get_event_loop().time()
             audio_chunks_sent = 0
+            audio_bytes_total = 0
             buffer = bytearray()
             first_chunk_received = False
             buffer_start_time: Optional[float] = None
 
             async for audio_chunk in tts.synthesize(speech_text, stream=TTS_STREAMING):
                 buffer.extend(audio_chunk)
+                audio_bytes_total += len(audio_chunk)
 
                 if not first_chunk_received:
                     first_chunk_received = True
                     buffer_start_time = asyncio.get_event_loop().time()
+                    if perf_logger.is_enabled() and t_tts_first is None:
+                        t_tts_first = time.perf_counter()
+                        perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
                     logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
 
                 current_time = asyncio.get_event_loop().time()
@@ -353,12 +397,20 @@ async def websocket_endpoint(websocket: WebSocket):
                 )
                 audio_chunks_sent += 1
 
+            if perf_logger.is_enabled():
+                t_tts_end = time.perf_counter()
+                perf_data["tts_total_ms"] = (t_tts_end - t_llm_end) * 1000
+
             tts_total_time = asyncio.get_event_loop().time() - tts_start_time
             logger.info(
                 "🔊 TTS complete: {} chunks, total {:.1f}ms",
                 audio_chunks_sent,
                 tts_total_time * 1000,
             )
+
+            # Store perf data for the outer scope to pick up
+            if perf_logger.is_enabled():
+                last_perf_data = perf_data
 
             await websocket.send_json({"type": "tts_end", "interrupted": False})
             await websocket.send_json({"type": "response_complete", "text": full_response})
@@ -438,6 +490,22 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+
+            elif msg_type == "perf_report":
+                if perf_logger.is_enabled():
+                    frontend_metrics = msg.get("metrics", {})
+                    context = {
+                        "transcript": last_transcript,
+                        "response_length": len(last_response),
+                        "tts_model": settings.tts_model,
+                        "llm_model": backend.model if backend else "unknown",
+                        "tts_voice": settings.tts_voice,
+                    }
+                    perf_logger.log_round(
+                        frontend_data=frontend_metrics,
+                        backend_data=last_perf_data,
+                        context=context,
+                    )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
