@@ -309,7 +309,11 @@ function App() {
 
     return () => {
       clearInterval(pingInterval);
-      // Don't close WebSocket - let it stay connected for responses
+      // Close old WebSocket before creating new one
+      if (wsRef.current) {
+        wsRef.current.onclose = null; // Prevent cleanup on intentional close
+        wsRef.current.close();
+      }
     };
   }, [getWsUrl, handleWebSocketMessage, sendMessage]);
 

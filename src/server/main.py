@@ -412,17 +412,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "listening_started"})
 
             elif msg_type == "stop_listening":
+                logger.info(f"🛑 stop_listening: state={connection_state}, buffer_size={len(audio_buffer)}")
                 if connection_state != "LISTENING":
+                    logger.warning(f"⚠️ stop_listening but state={connection_state}")
                     await send_listening_stopped_once()
                     continue
 
                 connection_state = "PROCESSING"
                 if not audio_buffer:
+                    logger.warning("⚠️ stop_listening but audio_buffer is empty")
                     await send_listening_stopped_once()
                     continue
 
                 audio_data = np.concatenate(audio_buffer)
                 audio_buffer = []
+                logger.info(f"🎵 Starting STT: {len(audio_data)} samples, {len(audio_data)/16000:.2f}s")
                 response_task = asyncio.create_task(run_turn(audio_data))
 
             elif msg_type == "interrupt":
