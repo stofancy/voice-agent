@@ -270,19 +270,25 @@ async def websocket_endpoint(websocket: WebSocket):
             connection_state = "PROCESSING"
             transcript, success = await stt.transcribe(audio_data)
 
-            await websocket.send_json(
-                {
-                    "type": "transcript",
-                    "text": transcript,
-                    "final": True,
-                }
-            )
-            logger.info(f"🎤 Transcript: {transcript}")
+            try:
+                await websocket.send_json(
+                    {
+                        "type": "transcript",
+                        "text": transcript,
+                        "final": True,
+                    }
+                )
+                logger.info(f"✅ Transcript sent successfully: {transcript}")
+            except Exception as e:
+                logger.error(f"❌ Failed to send transcript: {e}")
+                raise
 
             if not transcript.strip() or not success:
+                logger.info("🛑 Empty transcript, stopping")
                 await send_listening_stopped_once()
                 return
 
+            logger.info("🤖 Starting LLM chat stream...")
             full_response = ""
             async for chunk in backend.chat_stream(transcript):
                 full_response += chunk

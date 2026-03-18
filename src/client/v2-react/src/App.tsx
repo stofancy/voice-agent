@@ -144,6 +144,7 @@ function App() {
       case 'transcript':
         // User transcript received - add to history
         console.log('[App] Received transcript:', msg.text);
+        console.log('[App] WebSocket readyState:', wsRef.current?.readyState);
         if (msg.text) {
           setTranscriptHistory(prev => [...prev, {
             role: 'user',
@@ -153,6 +154,7 @@ function App() {
         }
         break;
       case 'subtitle_chunk':
+        console.log('[App] Received subtitle_chunk:', msg.text?.substring(0, 50));
         // Streaming subtitle text - update streaming state
         if (msg.text) {
           setStreamingSubtitle(prev => prev + msg.text);
@@ -166,6 +168,9 @@ function App() {
         break;
       case 'tts_start':
         isAiSpeakingRef.current = true;
+        break;
+      case 'listening_stopped':
+        console.log('[App] Received listening_stopped, waiting for transcript...');
         break;
       case 'tts_end':
         isAiSpeakingRef.current = false;
