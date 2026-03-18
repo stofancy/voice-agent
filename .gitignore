@@ -4,7 +4,9 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.bailian
 *.egg-info/
+openclaw-gateway-config/openclaw.json
 dist/
 build/
 .pytest_cache/
