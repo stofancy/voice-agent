@@ -116,12 +116,68 @@ class BailianSTT:
             )
             
             text = response.choices[0].message.content
-            logger.info(f"🎤 STT 识别结果：{text}")
+            logger.info(f"🎤 STT 识别结果（原始）：{text}")
+            
+            # 后处理：去除重复文字（Bailian STT 流式识别已知问题）
+            text = self._remove_duplicate_chars(text)
+            logger.info(f"🎤 STT 识别结果（处理后）：{text}")
             return text, True
             
         except Exception as e:
             logger.error(f"❌ STT 识别失败：{type(e).__name__}: {e}")
             return f"识别失败：{str(e)}", False
+    
+    def _remove_duplicate_chars(self, text: str) -> str:
+        """
+        去除重复字符和词组（Bailian STT 流式识别修复）
+        
+        例如：
+        - "很很多人" → "很多人"
+        - "没有没有正式" → "没有正式"
+        - "所以所以" → "所以"
+        - "名字字" → "名字"
+        """
+        if not text:
+            return text
+        
+        # 第一步：去除连续重复字符（单字重复）
+        result = []
+        i = 0
+        while i < len(text):
+            char = text[i]
+            
+            # 检查是否有连续重复（2-4 次）
+            repeat_count = 1
+            while i + repeat_count < len(text) and text[i + repeat_count] == char and repeat_count < 4:
+                repeat_count += 1
+            
+            # 只保留一个字符
+            result.append(char)
+            i += repeat_count
+        
+        # 第二步：去除重复词组（2-4 字词组）
+        text = ''.join(result)
+        result = []
+        i = 0
+        while i < len(text):
+            matched = False
+            
+            # 检查 2-4 字符词组的重复
+            for word_len in range(2, 5):
+                if i + word_len * 2 <= len(text):
+                    word1 = text[i:i + word_len]
+                    word2 = text[i + word_len:i + word_len * 2]
+                    if word1 == word2 and word1.strip() and len(word1.strip()) >= 2:
+                        result.append(word1)
+                        i += word_len * 2
+                        matched = True
+                        break
+            
+            if not matched:
+                result.append(text[i])
+                i += 1
+        
+        return ''.join(result)
     
     def _numpy_to_wav(
         self,
