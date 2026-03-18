@@ -195,6 +195,9 @@ function App() {
 
   // Wrapper functions for VoiceButton
   const handlePressStart = useCallback(async () => {
+    // Clear previous subtitle before starting new conversation
+    setStreamingSubtitle('');
+    
     const success = await startAudioCapture();
     if (success) {
       setIsRecording(true);
@@ -236,7 +239,8 @@ function App() {
       
       wsRef.current.onclose = () => {
         console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
-        // Don't auto-reconnect
+        // Clear streaming subtitle on disconnect to avoid stale display
+        setStreamingSubtitle('');
       };
       
       wsRef.current.onerror = (error) => {
