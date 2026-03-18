@@ -117,7 +117,7 @@ voice = "Cherry"
 
 | 配置项 | 值 | 说明 |
 |--------|-----|------|
-| API Key | `sk-your-api-key-here` | 主公现有配置 |
+| API Key | `sk-your-api-key-here` | 需替换为真实 API Key |
 | STT 模型 | `qwen3-asr-flash` | 短音频识别（≤5 分钟） |
 | TTS 模型 | `qwen3-tts-flash` | 快速语音合成 |
 | TTS 音色 | `Cherry` | 甜美女性 |
