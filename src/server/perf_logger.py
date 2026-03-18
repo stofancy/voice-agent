@@ -96,8 +96,9 @@ def log_round(
         fe_e2e = fe.get("button_release_to_first_audio_played_ms")
         be_e2e = (
             be.get("stt_ms", 0)
+            + be.get("llm_ttft_ms", 0)
             + be.get("llm_gen_ms", 0)
-            + be.get("tts_total_ms", 0)
+            + be.get("tts_ttfa_ms", 0)
         )
 
         if fe_e2e is not None:
