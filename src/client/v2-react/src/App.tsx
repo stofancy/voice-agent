@@ -236,16 +236,7 @@ function App() {
       
       wsRef.current.onclose = () => {
         console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
-        // Don't auto-reconnect if we're waiting for a response
-        if (isRecordingRef.current) {
-          console.log('[WebSocket] Closed while recording, reconnecting...');
-          setTimeout(connect, 1500);
-        }
-      };
-      
-      wsRef.current.onclose = () => {
-        console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
-        setTimeout(connect, 1500);
+        // Don't auto-reconnect
       };
       
       wsRef.current.onerror = (error) => {
@@ -262,9 +253,7 @@ function App() {
 
     return () => {
       clearInterval(pingInterval);
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
+      // Don't close WebSocket - let it stay connected for responses
     };
   }, [getWsUrl, handleWebSocketMessage, sendMessage]);
 
