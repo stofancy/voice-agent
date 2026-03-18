@@ -1,262 +1,195 @@
-# OpenClaw Voice - 开发与部署指南
+# 本地开发指南
 
-## 📐 架构设计
+## 架构说明
 
-### 生产环境（三容器分离）
-
-| 容器 | 端口 | 说明 |
-|------|------|------|
-| `openclaw-gateway` | 26523 | Gateway 服务 |
-| `openclaw-voice-backend` | 8765 | FastAPI 后端 |
-| `openclaw-voice-frontend` | 8764 | Nginx 静态文件 |
+本地开发环境使用**前后端分离**模式，与 Docker 生产环境保持一致：
 
 ```
-┌─────────────────────────────────────────┐
-│         Docker Compose                  │
-│  ┌───────────────────────────────────┐  │
-│  │  openclaw-gateway (18789 → 26523) │  │
-│  └───────────────────────────────────┘  │
-│                    ↑                     │
-│  ┌───────────────────────────────────┐  │
-│  │  openclaw-voice-backend (8765)    │  │
-│  │  - FastAPI + STT/TTS              │  │
-│  └───────────────────────────────────┘  │
-│                    ↑                     │
-│  ┌───────────────────────────────────┐  │
-│  │  openclaw-voice-frontend (8764)   │  │
-│  │  - Nginx + React                  │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                  本地开发环境                            │
+├─────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐    ┌─────────────────┐            │
+│  │  Vite Dev Server│    │   Uvicorn       │            │
+│  │  (前端)         │    │   (后端)        │            │
+│  │  :5173          │    │   :8766         │            │
+│  │                 │───→│                 │            │
+│  │  HMR 热更新      │    │   STT/TTS/LLM   │            │
+│  └─────────────────┘    └──────┬──────────┘            │
+│                                │                        │
+│                                ↓                        │
+│                      ┌─────────────────┐               │
+│                      │  Docker Gateway │               │
+│                      │  :26523         │               │
+│                      └─────────────────┘               │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### 开发环境（本地 + Docker）
+## 端口分配
 
 | 服务 | 端口 | 说明 |
 |------|------|------|
-| Gateway (Docker) | 26523 | 仅 Gateway 容器 |
-| 前端本地 | 5173 | Vite HMR |
-| 后端本地 | 8766 | Uvicorn --reload |
+| **前端 (Vite)** | 5173 | 开发服务器，支持 HMR |
+| **后端 (Uvicorn)** | 8766 | FastAPI 后端（Docker 用 8765） |
+| **Gateway (Docker)** | 26523 | OpenClaw Gateway 容器 |
 
-```
-┌─────────────────────────────────────────┐
-│         Docker (Gateway Only)           │
-│  ┌───────────────────────────────────┐  │
-│  │  openclaw-gateway (18789 → 26523) │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-                    ↑ WebSocket/API
-┌─────────────────────────────────────────┐
-│         本地开发环境                     │
-│  ┌───────────────────────────────────┐  │
-│  │  Vite Dev Server (5173)           │  │
-│  │  - 前端 HMR                        │  │
-│  └───────────────────────────────────┘  │
-│  ┌───────────────────────────────────┐  │
-│  │  Uvicorn --reload (8766)          │  │
-│  │  - 后端热重载                       │  │
-│  └───────────────────────────────────┘  │
-└─────────────────────────────────────────┘
-```
+## 快速启动
 
----
-
-## 🚀 生产部署
-
-### 一键部署
+### 0. 前置条件
 
 ```bash
-# 1. 配置环境变量
-cp .env.example .env
-# 编辑 .env 填入 Bailian API Key
-
-# 2. 部署
-./scripts/deploy.sh
-
-# 3. 访问
-# 前端：http://localhost:8764/
-# 后端 API: http://localhost:8765/
-```
-
-### 单独控制
-
-```bash
-# 只重启前端
-docker compose restart openclaw-voice-frontend
-
-# 只重启后端
-docker compose restart openclaw-voice-backend
-
-# 查看后端日志
-docker compose logs -f openclaw-voice-backend
-
-# 查看前端日志
-docker compose logs -f openclaw-voice-frontend
-```
-
----
-
-## 💻 本地开发
-
-### 启动步骤
-
-```bash
-# 1. 启动 Gateway（Docker）
-docker compose -f docker-compose.dev.yml up -d
-
-# 2. 启动后端（本地）
+# 确保 Gateway 容器运行
 cd ~/workspaces/voice-agent
-source .env.development
-python -m uvicorn src/server.main:app --reload --port 8766
+docker compose up -d openclaw-gateway
 
-# 3. 启动前端（本地）
-cd src/client/v2-react
+# 确保 Python 虚拟环境已创建
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 1. 启动后端
+
+```bash
+cd ~/workspaces/voice-agent
+source .venv/bin/activate
+python -m uvicorn src.server.main:app --host 0.0.0.0 --port 8766 --reload
+```
+
+**访问**：
+- 健康检查：http://localhost:8766/health
+- API 文档：http://localhost:8766/docs
+
+### 2. 启动前端（新终端）
+
+```bash
+cd ~/workspaces/voice-agent/src/client/v2-react
 npm run dev
 ```
 
-### 访问地址
+**访问**：http://localhost:5173/v2/
 
-| 服务 | 地址 | 说明 |
-|------|------|------|
-| 前端开发 | http://localhost:5173/ | Vite HMR |
-| 后端开发 | http://localhost:8766/ | Uvicorn |
-| Gateway | http://localhost:26523/ | Docker |
+### 3. 一键启动脚本
 
----
-
-## 🔧 配置说明
-
-### 环境变量
-
-| 变量 | 说明 | 默认值 |
-|------|------|--------|
-| `ALI_BAILIAN_API_KEY` | 百炼 API 密钥 | - |
-| `OPENCLAW_GATEWAY_TOKEN` | Gateway 认证令牌 | `openclaw-your-gateway-token-here` |
-| `OPENCLAW_BACKEND_PORT` | 后端端口 | `8765` |
-| `OPENCLAW_FRONTEND_PORT` | 前端端口 | `8764` |
-| `OPENCLAW_STT_MODEL` | STT 模型 | `qwen3-asr-flash` |
-| `OPENCLAW_TTS_MODEL` | TTS 模型 | `qwen3-tts-flash` |
-| `OPENCLAW_TTS_VOICE` | TTS 音色 | `Cherry` |
-
-### Gateway 连接
-
-**生产环境**（Docker 网络）：
 ```bash
-OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
+# 启动所有服务
+./scripts/dev.sh
+
+# 或手动启动
+./scripts/dev-backend.sh &
+./scripts/dev-frontend.sh &
 ```
 
-**开发环境**（本地连接 Docker）：
+## 配置文件
+
+### `.env.local`（后端）
+
 ```bash
+# Bailian API Key
+OPENCLAW_BAILIAN_API_KEY=sk-your-key-here
+
+# 后端配置
+OPENCLAW_HOST=0.0.0.0
+OPENCLAW_PORT=8766
+OPENCLAW_STT_MODEL=qwen3-asr-flash
+OPENCLAW_TTS_MODEL=qwen3-tts-flash
+OPENCLAW_TTS_VOICE=Cherry
+
+# Gateway（Docker 容器）
 OPENCLAW_GATEWAY_URL=http://localhost:26523
+OPENCLAW_GATEWAY_TOKEN=openclaw-your-gateway-token-here
 ```
 
----
+### `vite.config.ts`（前端）
 
-## 📋 常用命令
+```typescript
+export default defineConfig({
+  plugins: [react()],
+  base: '/v2/',  // ← 重要：API 路由前缀
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
+})
+```
 
-### 生产环境
+## 开发工作流
+
+### 前端开发
+
+- ✅ **HMR 热更新**：修改代码后自动刷新
+- ✅ **TypeScript**：类型检查
+- ✅ **ESLint**：代码规范
+
 ```bash
-# 部署
-./scripts/deploy.sh
+# 类型检查
+npm run type-check
 
-# 查看状态
-docker compose ps
+# 代码检查
+npm run lint
+
+# 构建生产版本
+npm run build
+```
+
+### 后端开发
+
+- ✅ **自动重载**：修改代码后自动重启
+- ✅ **API 文档**：http://localhost:8766/docs
+- ✅ **健康检查**：http://localhost:8766/health
+
+```bash
+# 测试 API
+curl http://localhost:8766/health
 
 # 查看日志
-docker compose logs -f
-
-# 停止
-docker compose down
-
-# 重新构建
-docker compose build --no-cache
+# uvicorn 会自动输出到终端
 ```
 
-### 开发环境
+### 调试 Gateway
+
 ```bash
-# 启动 Gateway
-docker compose -f docker-compose.dev.yml up -d
-
-# 停止 Gateway
-docker compose -f docker-compose.dev.yml down
-
 # 查看 Gateway 日志
 docker compose logs -f openclaw-gateway
+
+# 重启 Gateway
+docker compose restart openclaw-gateway
+
+# 进入容器
+docker exec -it openclaw-voice-openclaw-gateway-1 sh
 ```
 
----
+## 与 Docker 生产环境的区别
 
-## 🔍 故障排查
+| 方面 | 本地开发 | Docker 生产 |
+|------|----------|-------------|
+| 后端端口 | 8766 | 8765 |
+| 前端端口 | 5173 (Vite) | 8764 (Nginx) |
+| 代码更新 | 实时 HMR/重载 | 需重新构建镜像 |
+| 调试 | 支持断点/日志 | 查看容器日志 |
+| 依赖 | 本地 .venv/node_modules | Docker 镜像内 |
 
-### Gateway 连接失败
+## 部署到生产
 
 ```bash
-# 检查 Gateway 状态
-docker compose ps
+# 停止本地开发服务
+pkill -f "uvicorn src.server.main"
+pkill -f "vite"
 
-# 测试 Gateway 健康
-curl http://localhost:26523/health
-
-# 查看 Gateway 日志
-docker compose logs openclaw-gateway
+# 构建并部署
+./scripts/deploy.sh
 ```
 
-### 后端 404
+## 常见问题
 
-```bash
-# 检查后端状态
-curl http://localhost:8765/
+### Q: 后端启动失败，提示端口被占用
+A: 检查是否有 Docker 容器占用 8766 端口，或修改 `.env.local` 中的 `OPENCLAW_PORT`
 
-# 查看后端日志
-docker compose logs openclaw-voice-backend
-```
+### Q: 前端无法连接后端
+A: 检查前端代码中的 API URL 是否指向 `localhost:8766`
 
-### 前端 404
-
-```bash
-# 检查前端状态
-curl http://localhost:8764/
-
-# 查看前端日志
-docker compose logs openclaw-voice-frontend
-
-# 重新构建前端
-docker compose build openclaw-voice-frontend
-docker compose restart openclaw-voice-frontend
-```
-
----
-
-## 📊 端口分配
-
-| 服务 | 容器内端口 | 主机端口 | 说明 |
-|------|-----------|---------|------|
-| Gateway | 18789 | 26523 | Gateway API |
-| Gateway | 18790 | 26524 | Gateway 控制 |
-| Backend | 8765 | 8765 | FastAPI |
-| Frontend | 80 | 8764 | Nginx |
-| Dev Frontend | 5173 | 5173 | Vite (本地) |
-| Dev Backend | 8766 | 8766 | Uvicorn (本地) |
-
----
-
-## 🎯 架构优势
-
-### 前后端分离
-
-| 优势 | 说明 |
-|------|------|
-| ✅ 独立扩展 | 前端/后端可独立扩容 |
-| ✅ 独立部署 | 前端更新无需重启后端 |
-| ✅ 技术栈独立 | 前端用 Nginx，后端用 Python |
-| ✅ 缓存优化 | Nginx 可配置静态资源缓存 |
-
-### 开发/生产一致
-
-| 特性 | 说明 |
-|------|------|
-| ✅ 相同 Gateway | 开发/生产使用同一 Gateway |
-| ✅ 相同配置 | 环境变量管理一致 |
-| ✅ 快速切换 | `docker compose` vs `npm run dev` |
+### Q: Gateway 连接失败
+A: 确保 Docker 容器运行：`docker compose ps openclaw-gateway`
 
 ---
 

@@ -60,7 +60,8 @@ class Settings(BaseSettings):
 
     class Config:
         env_prefix = "OPENCLAW_"
-        env_file = ".env"
+        env_file = ".env.local"
+        extra = "ignore"
 
 
 settings = Settings()
