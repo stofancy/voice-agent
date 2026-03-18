@@ -145,12 +145,22 @@ function App() {
         // User transcript received - add to history
         console.log('[App] Received transcript:', msg.text);
         console.log('[App] WebSocket readyState:', wsRef.current?.readyState);
+        console.log('[App] Starting keepalive ping during LLM processing...');
         if (msg.text) {
           setTranscriptHistory(prev => [...prev, {
             role: 'user',
             text: msg.text,
             timestamp: Date.now(),
           }]);
+        }
+        // Start keepalive ping to prevent disconnection during LLM processing
+        if (!window.keepaliveInterval) {
+          window.keepaliveInterval = setInterval(() => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+              sendMessage('ping');
+              console.log('[App] Keepalive ping sent');
+            }
+          }, 5000);
         }
         break;
       case 'subtitle_chunk':
@@ -295,10 +305,31 @@ function App() {
       };
       
       wsRef.current.onclose = () => {
-        console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
+        console.log('[WebSocket] Closed, state:', wsRef.current?.readyState, 'at', new Date().toISOString());
         // Clear streaming subtitle on disconnect to avoid stale display
         setStreamingSubtitle('');
       };
+      
+      // Keep connection alive during LLM processing
+      let pingInterval: NodeJS.Timeout | null = null;
+      const startKeepAlive = () => {
+        if (pingInterval) return;
+        pingInterval = setInterval(() => {
+          if (wsRef.current?.readyState === WebSocket.OPEN) {
+            sendMessage('ping');
+          }
+        }, 10000);
+      };
+      const stopKeepAlive = () => {
+        if (pingInterval) {
+          clearInterval(pingInterval);
+          pingInterval = null;
+        }
+      };
+      
+      // Start keepalive on transcript received, stop on tts_end
+      const originalHandleMessage = handleWebSocketMessage;
+      // This will be handled in the message handler below
       
       wsRef.current.onerror = (error) => {
         console.error('[WebSocket] Error:', error);
