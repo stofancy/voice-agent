@@ -326,9 +326,9 @@
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const apiKey = getApiKey();
-            // Connect to backend server on port 8766
-            const backendHost = window.location.hostname + ':8766';
-            const wsPath = '/v2/ws';
+            // Connect to backend server on same host:port
+            const backendHost = window.location.host;
+            const wsPath = '/ws';
             const wsUrl = apiKey 
                 ? `${protocol}//${backendHost}${wsPath}?api_key=${apiKey}`
                 : `${protocol}//${backendHost}${wsPath}`;
