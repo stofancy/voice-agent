@@ -79,9 +79,7 @@ class WhisperSTT:
         except Exception as e:
             logger.warning(f"openai-whisper failed: {e}")
         
-        # Mock mode for testing
-        logger.warning("⚠️ No STT backend - using mock mode")
-        self._backend = "mock"
+        raise RuntimeError("STT not configured - check ALI_BAILIAN_API_KEY")
     
     async def transcribe(self, audio: np.ndarray) -> str:
         """Transcribe audio to text."""

@@ -326,12 +326,12 @@
         function connect() {
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const apiKey = getApiKey();
-            // Support serving from subdirectory (e.g., /voice)
-            const basePath = window.location.pathname.replace(/\/$/, '');
-            const wsPath = basePath ? `${basePath}/ws` : '/ws';
+            // Connect to backend server on port 8766
+            const backendHost = window.location.hostname + ':8766';
+            const wsPath = '/v2/ws';
             const wsUrl = apiKey 
-                ? `${protocol}//${window.location.host}${wsPath}?api_key=${apiKey}`
-                : `${protocol}//${window.location.host}${wsPath}`;
+                ? `${protocol}//${backendHost}${wsPath}?api_key=${apiKey}`
+                : `${protocol}//${backendHost}${wsPath}`;
             
             ws = new WebSocket(wsUrl);
             

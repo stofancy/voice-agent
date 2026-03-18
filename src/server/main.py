@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     class Config:
         env_prefix = "OPENCLAW_"
         env_file = ".env"
+        extra = "allow"  # Allow extra fields for compatibility
 
 
 settings = Settings()
@@ -119,14 +120,18 @@ async def startup():
         )
     else:
         logger.info("🔌 No Gateway configured - Using Bailian API directly")
-        fallback_api_key = os.getenv("ALI_BAILIAN_API_KEY") or os.getenv("OPENAI_API_KEY") or "mock-key"
-        if fallback_api_key == "mock-key":
-            logger.warning("⚠️ No AI backend key found, using mock key for local/dev startup")
+        fallback_api_key = os.getenv("ALI_BAILIAN_API_KEY") or os.getenv("OPENAI_API_KEY")
+        if not fallback_api_key:
+            raise ValueError("ALI_BAILIAN_API_KEY or OPENAI_API_KEY required - no AI backend configured")
         backend = AIBackend(
             backend_type="openai",
             url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model="qwen-turbo",
+            model="qwen3.5-flash",
             api_key=fallback_api_key,
+            system_prompt=(
+                "You are a helpful voice assistant. Keep responses concise and conversational. "
+                "Aim for 1-2 sentences unless more detail is needed."
+            ),
         )
 
     logger.info("Loading VAD model")

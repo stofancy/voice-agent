@@ -33,7 +33,7 @@ class BailianSTT:
     def _setup_client(self):
         """设置 OpenAI 兼容客户端"""
         if not self.api_key:
-            logger.warning("⚠️  ALI_BAILIAN_API_KEY not set, STT will use mock mode")
+            raise ValueError("ALI_BAILIAN_API_KEY not set - STT requires Bailian API key")
             self._client = None
             return
         
@@ -67,7 +67,7 @@ class BailianSTT:
             (识别文本，是否成功)
         """
         if self._client is None:
-            return "Mock: 语音识别服务未配置", False
+            raise RuntimeError("STT not initialized - check ALI_BAILIAN_API_KEY")
         
         try:
             # 重采样到 16kHz（如果前端不是 16kHz）

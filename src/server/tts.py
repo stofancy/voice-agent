@@ -80,9 +80,7 @@ class ChatterboxTTS:
         except Exception as e:
             logger.warning(f"XTTS failed: {e}")
         
-        # Mock mode
-        logger.warning("⚠️ No TTS backend - using mock mode (silence)")
-        self._backend = "mock"
+        raise RuntimeError("TTS not configured - check ALI_BAILIAN_API_KEY")
     
     def _get_device(self) -> str:
         if self.device != "auto":
@@ -163,7 +161,4 @@ class ChatterboxTTS:
             return np.array(wav, dtype=np.float32)
         
         else:
-            # Mock mode - return short silence
-            logger.debug(f"Mock TTS: '{text[:50]}...'")
-            # 0.5 seconds of silence at 24kHz
-            return np.zeros(12000, dtype=np.float32)
+            raise RuntimeError("TTS not configured - check ALI_BAILIAN_API_KEY")

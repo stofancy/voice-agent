@@ -45,7 +45,7 @@ class BailianTTS:
         self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
         
         if not self.api_key:
-            logger.warning("⚠️  ALI_BAILIAN_API_KEY not set, TTS will use mock mode")
+            raise ValueError("ALI_BAILIAN_API_KEY not set - TTS requires Bailian API key")
         else:
             logger.info(f"✅ 百炼 TTS 就绪 (模型：{self.model}, 音色：{self.voice})")
     
@@ -71,9 +71,7 @@ class BailianTTS:
             PCM 音频数据块
         """
         if not self.api_key:
-            # Mock 模式
-            logger.debug("Mock TTS: 无音频输出")
-            return
+            raise RuntimeError("TTS not initialized - check ALI_BAILIAN_API_KEY")
         
         try:
             session = await self._get_session()
