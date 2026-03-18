@@ -1,140 +1,289 @@
 # Session Handover 2026-03-18
 
-**会话时间**: 2026-03-17 23:27 - 2026-03-18 00:27
-**参与人员**: 问天（主公）、九章（臣）
-**代码仓库**: `~/workspaces/voice-agent/`
+**Session 时间**: 2026-03-18 13:42 - 16:15 (约 2.5 小时)  
+**分支**: `feat/v2-ui-redesign`  
+**主要任务**: V2 前端重构 + 敏感信息脱敏
 
 ---
 
-## 📋 完成事项
+## 📊 本 Session 完成事项
 
-### 1. Review 规则体系建立 ✅
-- **创建文档**: `docs/REVIEW_RULES.md` (v2.0)
-- **核心原则**:
-  1. 零信任验证（不信任代码、报告、子代理回复）
-  2. 驳回是常态（每次 Review 都可能返工）
-  3. 需求满足度（Review 的最大规则）
-- **Review 方向**: 需求、安全、构建、功能、代码质量、测试、性能、文档
-- **配置更新**: docs 文件夹纳入向量存储（SQLite + Embedding）
+### 1. V1 功能验证 ✅
 
-### 2. 子代理协作协议调整 ✅
-- **SOUL.md 更新**: 增加"工作模式识别"和"增量开发流程"
-- **MEMORY.md 更新**: 记录主公工作偏好
-- **自动识别**: 根据任务类型自动选择工作模式（增量开发/快速修复/研究）
+**问题发现**:
+- 前一 session 沉迷于"后端链路打通"，偏离了前端重构的主要目标
+- V2 React 交互逻辑完全错误（多轮对话混乱、音频重叠）
 
-### 3. 待办事项合并 ✅
-- **MEMORY.md**: 更新 OpenClaw Voice 项目待办
-- **TODOS.md**: 新增 booking-com-automation skill 集成、Docker 挂载优化
+**解决**:
+1. 回滚到 commit `c2a6dd1`（V2 重构前基准）
+2. 创建新分支 `feat/v2-ui-redesign`
+3. 恢复 V1 代码并测试
+4. 确认 V1 交互流程正确：
+   - 按住说话 → 松开 → 等待响应 → 播放音频
+   - 多轮对话正常
+   - 音频队列播放（不重叠）
 
-### 4. AI Studio 原型分析 ✅
-- **上传**: `v2_ui_design.zip` (269KB)
-- **分析报告**: `docs/AI_STUDIO_PROTOTYPE_ANALYSIS.md`
-- **结论**: 原型质量 4/5，建议快速集成视觉设计亮点
+**V1 核心交互逻辑**（需应用到 V2）:
+```javascript
+// 流式状态管理
+let audioQueue = [];        // 音频队列（避免重叠）
+let isPlayingQueue = false;
+let currentResponseElement = null;
+let streamingText = '';
 
-### 5. Docker 迁移指南 ✅
-- **文档**: `docs/DOCKER_MIGRATION_GUIDE.md`
-- **目标**: 从 Docker volume 改为 bind mount (`~/voice-agent-data/`)
-- **要求**: 保证现有 volume 文件不丢失
+// 关键：收到 transcript 时清空状态
+case 'transcript':
+    streamingText = '';
+    currentResponseElement = null;
+    audioQueue = [];  // ← 清空队列！
+    break;
 
-### 6. WAV 检测代码优化 ✅
-- **提交**: `3432973` refactor(client): optimize WAV detection logic
-- **优化**: 35 行 → 15 行（-57%）
-- **保留价值**: 未来兼容性（支持 WAV 格式）、调试信息、代码成本低
-
-### 7. 代码仓库整理 ✅
-- **合并到 main**: 所有 feat/openclaw-low-latency-transport 分支代码
-- **新 branch**: `feat/v2-refactor-2026-03-18`（用于 v2 重构）
-- **推送**: main 分支已推送到远程
-
----
-
-## 📊 当前状态
-
-### 分支结构
-```
-main (已更新)
-└── feat/v2-refactor-2026-03-18 (新分支，当前工作分支)
+// 音频队列播放
+case 'audio_chunk':
+    queueAudioChunk(msg.data, msg.sample_rate);  // ← 队列，不直接播放
+    break;
 ```
 
-### 待提交文件
-- `.env.bailian` (配置更新)
-- `Dockerfile.bailian` (依赖修复)
-- `TODOS.md` (待办更新)
-- `tests/e2e/fixtures/audio/*.wav` (测试音频)
-- `tests/e2e/performance_report.json` (性能报告)
-- `docs/AI_STUDIO_PROTOTYPE_ANALYSIS.md` (新增)
-- `docs/DOCKER_MIGRATION_GUIDE.md` (新增)
-- `v2_ui_design.zip` (原型压缩包)
-- `v2_ui_design_extracted/` (解压目录)
+**测试确认**:
+- ✅ STT 识别正常
+- ✅ LLM 响应正常
+- ✅ TTS 流式播放正常
+- ✅ WebSocket 连接稳定
 
 ---
 
-## 🎯 下阶段任务（待规划）
+### 2. 敏感信息脱敏 ✅
 
-### v2 前端重构（基于 v1）
-**参考**: 当前 v1 实现 (`src/client/index.html`)
-**目标**: 全面重构，分步骤执行
+#### Phase 1: 文件脱敏
 
-**要求**:
-- 增量 commit（小任务、小修改、小提交）
-- 每个 commit 后 Code Review → 修复 → Push
-- 使用 Claude ACP 子代理执行代码修改
-- 九章负责规划、架构、Review
-
-**下一步**:
-1. 创建 `docs/PLAN_v2_refactor.md`
-2. 任务拆解（细化到 30 分钟内可完成）
-3. 主公批准计划
-4. 启动 Claude ACP 执行
-
----
-
-## 📝 重要决策
-
-### Review 规则原则
-- **不写死检查清单**，改为原则性指导
-- **灵活应用**，根据任务类型调整 Review 重点
-- **核心原则不可违背**（零信任、驳回常态、需求满足）
-
-### WAV 检测代码
-- **保留并优化**（15 行 vs 原 35 行）
-- **理由**: 未来兼容性、调试价值、成本极低
-
-### 工作模式
-- **先商量再执行**（不要着急开始）
-- **增量开发**（小任务、小提交、频繁 Review）
-- **子代理使用**（九章规划，Claude 编码）
-
----
-
-## 🔗 相关文档
-
-| 文档 | 位置 | 说明 |
+**脱敏文件**:
+| 文件 | 操作 | 说明 |
 |------|------|------|
-| Review 规则 | `docs/REVIEW_RULES.md` | 3 条核心原则 + 8 个 Review 方向 |
-| 原型分析 | `docs/AI_STUDIO_PROTOTYPE_ANALYSIS.md` | AI Studio 原型对比分析 |
-| Docker 迁移 | `docs/DOCKER_MIGRATION_GUIDE.md` | Volume → Bind mount 指南 |
-| 测试指南 | `docs/TESTING_GUIDELINE.md` | 后端 E2E 测试指南 |
-| 待办事项 | `TODOS.md` | 项目待办列表 |
+| `.env.example` | 修改 | API key → `sk-your-api-key-here` |
+| `.env.bailian` | 修改 | API key → `sk-your-api-key-here` |
+| `.gitignore` | 更新 | 添加 `.env.bailian` 和 `openclaw.json` |
+| `openclaw-gateway-config/openclaw.json` | 加入 .gitignore | 实际配置不提交 |
+| `openclaw-gateway-config/openclaw.json.example` | 新建 | 占位符模板 |
+| `openclaw-gateway-config/README.md` | 新建 | 配置说明文档 |
+| `COMPLETION_REPORT.md` | 修改 | 文档脱敏 |
+| `README.bailian.md` | 修改 | 文档脱敏 |
+| `gateway-config/openclaw.json` | 修改 | 旧目录脱敏 |
+
+**提交记录**:
+```
+5563ccd security: 更新 .gitignore 排除所有 openclaw.json
+1b22e25 security: 补充脱敏文档
+139b8fb security: Phase 1 敏感信息脱敏
+68293c7 feat: 删除所有 mock 模式代码，强制 API key 配置
+```
+
+#### Phase 2: Git 历史清理
+
+**工具**: `git-filter-repo`（比 git-filter-branch 更先进）
+
+**清理内容**:
+| 敏感信息 | 清理前 | 清理后 |
+|---------|--------|--------|
+| Bailian API Key (`sk-93ae...`) | 14 次 | 0 次 |
+| 旧 API Key (`REDACTED-gateway-key...`) | 37 次 | 0 次 |
+| Gateway Token | 101 次 | 0 次 |
+| Commit Message | 3 条 | 0 条 |
+
+**执行命令**:
+```bash
+# 创建替换规则
+echo -e "sk-93ae...==>sk-your-api-key-here\nREDACTED-gateway-key...==>sk-your-api-key-here\nREDACTED-openclaw-voice-token==>openclaw-your-gateway-token-here" > /tmp/sensitive-patterns-v2.txt
+
+# 清理文件内容
+git filter-repo --replace-text /tmp/sensitive-patterns-v2.txt --force
+
+# 清理 Commit Message
+git filter-repo --message-callback 'return message.replace(b"sk-93ae...", b"sk-your-api-key-here")...' --force
+
+# Force Push
+git push --force --all origin
+git push --force --tags origin
+```
+
+**备份**: `voice-agent-backup-20260318-154224.tar.gz` (112M)
+
+**结果**: ✅ 所有敏感信息已清理，远程仓库已覆盖
 
 ---
 
-## ⏭️ 下 Session 继续
+### 3. LLM 模型切换 ✅
 
-**任务**: v2 前端重构规划
-**准备**:
-1. 审查当前 v1 代码
-2. 创建 PLAN_v2_refactor.md
-3. 任务拆解（基于 AI Studio 原型分析）
-4. 主公批准计划
-5. 启动 Claude ACP 执行
+**切换历史**:
+1. `qwen-turbo` → `qwen3.5-plus`（发现问题：响应慢）
+2. `qwen3.5-plus` → `qwen3.5-flash`（问天君手动切换）
 
-**约定**:
-- 增量 commit 模式
-- 每个 commit 后 Review → 修复 → Push
-- 小任务、小修改、小提交（30 分钟内）
+**配置位置**:
+- `.env`: `OPENCLAW_DEFAULT_MODEL=bailian/qwen3.5-flash`
+- `src/server/main.py`: 从环境变量读取
+
+**性能对比**:
+| 模型 | TTFT | 适用场景 |
+|------|------|----------|
+| qwen-turbo | ~1s | 快速响应 |
+| qwen3.5-plus | ~2-4s | 高质量响应 |
+| qwen3.5-flash | ~0.5-1s | 语音对话 ✅ |
 
 ---
 
-*文档创建时间：2026-03-18 00:28*
-*作者：九章*
+### 4. Mock 模式删除 ✅
+
+**删除文件**:
+- `src/server/bailian_stt.py` - mock 模式 → 抛出异常
+- `src/server/bailian_tts.py` - mock 模式 → 抛出异常
+- `src/server/stt.py` - mock 模式 → 抛出异常
+- `src/server/tts.py` - mock 模式 → 抛出异常
+- `src/server/main.py` - 强制 API key 配置
+
+**影响**:
+- ✅ 无 API key 时启动失败（明确错误）
+- ✅ 避免误用 mock 模式导致功能异常
+
+---
+
+## 🔴 遗留事项（待下一 Session 完成）
+
+### 1. V2 React 交互修复（高优先级）
+
+**问题**:
+- 多轮对话上下文混乱
+- 音频播放重叠
+- WebSocket 频繁重连
+
+**需要做的**:
+1. 基于 V1 交互逻辑重写 V2 `App.tsx`
+2. 实现音频队列播放（参考 V1 `queueAudioChunk`）
+3. 修复流式状态管理（`transcript` 时清空）
+4. 简化 WebSocket 管理（移除频繁重连）
+
+**参考文件**:
+- `src/client/index.html` (V1) - 正确交互逻辑
+- `src/client/v2-react/src/App.tsx` (V2) - 需要修复
+
+---
+
+### 2. OpenClaw Gateway 集成（中优先级）
+
+**当前状态**: 直连百炼 API
+
+**需要切换**:
+```python
+# 当前（直连百炼）
+backend = AIBackend(
+    url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model="qwen3.5-flash",
+)
+
+# 目标（通过 Gateway）
+backend = AIBackend(
+    url="http://localhost:26523/v1",  # Gateway URL
+    model="openclaw:main",
+    api_key="REDACTED-openclaw-voice-token",
+)
+```
+
+**配置**:
+- `OPENCLAW_GATEWAY_URL=http://localhost:26523`
+- `OPENCLAW_GATEWAY_TOKEN=REDACTED-openclaw-voice-token`
+
+---
+
+### 3. Docker 部署测试（低优先级）
+
+**待测试**:
+- Gateway 独立部署（Docker volume）
+- Voice Backend 连接 Gateway
+- 前端访问后端
+
+**参考文档**:
+- `docker-compose.yml`
+- `openclaw-gateway-config/README.md`
+
+---
+
+## 📁 关键文件位置
+
+| 文件 | 路径 | 说明 |
+|------|------|------|
+| **V1 前端** | `src/client/index.html` | 正确交互逻辑参考 |
+| **V2 React** | `src/client/v2-react/src/App.tsx` | 需要修复 |
+| **后端主逻辑** | `src/server/main.py` | LLM 配置、WebSocket |
+| **环境配置** | `.env`, `.env.example` | API Key 配置 |
+| **Gateway 配置** | `openclaw-gateway-config/` | Gateway 配置模板 |
+| **备份** | `~/workspaces/voice-agent-backup-*.tar.gz` | 脱敏前备份 |
+
+---
+
+## 🎯 下一 Session 优先任务
+
+### Phase 1: V2 交互修复（必须完成）
+
+1. 阅读 V1 `src/client/index.html` 理解交互逻辑
+2. 重写 V2 `App.tsx`：
+   - 音频队列播放
+   - 流式状态管理
+   - WebSocket 简化
+3. 测试多轮对话
+4. 测试音频播放（不重叠）
+
+### Phase 2: Gateway 集成（时间允许）
+
+1. 配置 Gateway URL 和 Token
+2. 测试 LLM 通过 Gateway 调用
+3. 验证完整流程
+
+### Phase 3: Docker 部署（可选）
+
+1. 启动 Gateway Docker
+2. 配置 Voice Backend 连接
+3. 端到端测试
+
+---
+
+## ⚠️ 重要注意事项
+
+### 1. 敏感信息处理
+
+- ✅ 已脱敏并推送到远程
+- ⚠️ 本地 `.env` 和 `openclaw-gateway-config/openclaw.json` 需手动配置
+- ⚠️ 协作者需重新 clone（历史已重写）
+
+### 2. 分支状态
+
+- **当前分支**: `feat/v2-ui-redesign`
+- **已推送**: 所有分支已 force push
+- **备份**: `voice-agent-backup-20260318-154224.tar.gz`
+
+### 3. 测试环境
+
+- **后端端口**: 8766
+- **前端端口**: 8767 (V1), 5173 (V2 React)
+- **Gateway 端口**: 26523
+
+---
+
+## 📝 Session 回顾命令
+
+```bash
+# 查看本 session 提交
+cd ~/workspaces/voice-agent
+git log --oneline c2a6dd1..HEAD
+
+# 查看脱敏提交
+git log --oneline --grep="security:"
+
+# 查看 V1 代码
+git show c2a6dd1:src/client/index.html
+
+# 查看备份
+ls -lh ~/workspaces/voice-agent-backup-*.tar.gz
+```
+
+---
+
+*最后更新*: 2026-03-18 16:15  
+*作者*: 太昊·九章
