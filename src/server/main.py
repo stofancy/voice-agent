@@ -17,11 +17,15 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from pydantic_settings import BaseSettings
+
+# Load .env.local for development (project root)
+load_dotenv(Path(__file__).parent.parent.parent / ".env.local")
 
 from .auth import APIKey, load_keys_from_env, token_manager
 from .backend import AIBackend
