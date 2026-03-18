@@ -66,14 +66,19 @@ function App() {
 
   // WebSocket URL builder
   const getWsUrl = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const key = getApiKey();
     const path = '/v2/ws';
+    
+    // Use backend URL from environment variable (with fallback)
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || `http://${window.location.hostname}:8766`;
+    const protocol = backendUrl.startsWith('https:') ? 'wss:' : 'ws:';
+    const wsHost = backendUrl.replace(/^https?:\/\//, '');
+    
     if (key) {
-      return `${protocol}//${window.location.host}${path}?api_key=${encodeURIComponent(key)}`;
+      return `${protocol}//${wsHost}${path}?api_key=${encodeURIComponent(key)}`;
     }
-    return `${protocol}//${window.location.host}${path}`;
-  }, [getApiKey]);
+    return `${protocol}//${wsHost}${path}`;
+  }, []);
 
   // Send message via WebSocket
   const sendMessage = useCallback((type: string, data?: any) => {
