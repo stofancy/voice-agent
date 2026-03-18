@@ -119,6 +119,8 @@ services:
       # TTS Buffer Configuration
       - OPENCLAW_TTS_TIME_BUFFER_SECONDS=${OPENCLAW_TTS_TIME_BUFFER_SECONDS:-0.1}
       - OPENCLAW_TTS_DATA_BUFFER_SIZE=${OPENCLAW_TTS_DATA_BUFFER_SIZE:-8192}
+      # Performance Logging
+      - OPENCLAW_PERF_LOGGING=${OPENCLAW_PERF_LOGGING:-false}
       # Gateway Connection (same network, use service name)
       - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-openclaw-your-gateway-token-here}
