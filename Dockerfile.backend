@@ -1,28 +1,6 @@
-# OpenClaw Voice - Bailian Edition Docker image
-# Multi-stage build for production-ready deployment
+# OpenClaw Voice - Backend Dockerfile
+# Python FastAPI backend only
 
-# ============================================
-# Stage 1: Build Frontend
-# ============================================
-FROM node:20-alpine AS frontend-builder
-
-WORKDIR /app
-
-# Copy package files
-COPY src/client/v2-react/package*.json ./
-
-# Install dependencies
-RUN npm install --frozen-lockfile
-
-# Copy source code
-COPY src/client/v2-react/ ./
-
-# Build for production
-RUN npm run build
-
-# ============================================
-# Stage 2: Python Backend + Static Files
-# ============================================
 FROM python:3.11-slim
 
 WORKDIR /app
@@ -41,9 +19,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY src/server/ ./src/server/
 
-# Copy built frontend from builder stage
-COPY --from=frontend-builder /app/dist ./src/client/v2
-
 # Create directories
 RUN mkdir -p /app/data /app/logs
 
@@ -53,8 +28,6 @@ ENV OPENCLAW_PORT=8765
 ENV OPENCLAW_STT_MODEL=qwen3-asr-flash
 ENV OPENCLAW_TTS_MODEL=qwen3-tts-flash
 ENV OPENCLAW_TTS_VOICE=Cherry
-ENV OPENCLAW_GATEWAY_BIND=lan
-ENV OPENCLAW_GATEWAY_PORT=26523
 
 # Expose port
 EXPOSE 8765

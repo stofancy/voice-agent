@@ -78,7 +78,11 @@ function App() {
   // Send message via WebSocket
   const sendMessage = useCallback((type: string, data?: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, ...data }));
+      const msg = JSON.stringify({ type, ...data });
+      console.log('[WebSocket] Sending:', type, data ? `(${JSON.stringify(data).length} bytes)` : '');
+      wsRef.current.send(msg);
+    } else {
+      console.warn('[WebSocket] Cannot send, state:', wsRef.current?.readyState);
     }
   }, []);
 
@@ -165,9 +169,12 @@ function App() {
   // Audio capture hook
   const { startRecording: startAudioCapture, stopRecording: stopAudioCapture } = useAudioCapture({
     onAudioData: (base64Data: string) => {
+      console.log('[App] onAudioData called, sending audio, length:', base64Data.length);
+      console.log('[App] WebSocket state:', wsRef.current?.readyState);
       sendMessage('audio', { data: base64Data });
     },
     onSilence: () => {
+      console.log('[App] onSilence called');
       // VAD detected silence - auto stop in continuous mode
       if (continuousMode && isRecordingRef.current) {
         stopAudioCapture();
@@ -198,8 +205,15 @@ function App() {
 
   // Initialize WebSocket connection
   useEffect(() => {
+    const wsUrl = getWsUrl();
+    console.log('[WebSocket] Connecting to:', wsUrl);
+    
     const connect = () => {
-      wsRef.current = new WebSocket(getWsUrl());
+      wsRef.current = new WebSocket(wsUrl);
+      
+      wsRef.current.onopen = () => {
+        console.log('[WebSocket] Connected, state:', wsRef.current?.readyState);
+      };
       
       wsRef.current.onmessage = (event) => {
         try {
@@ -210,11 +224,12 @@ function App() {
       };
       
       wsRef.current.onclose = () => {
+        console.log('[WebSocket] Closed, state:', wsRef.current?.readyState);
         setTimeout(connect, 1500);
       };
       
       wsRef.current.onerror = (error) => {
-        console.error('WebSocket error:', error);
+        console.error('[WebSocket] Error:', error);
       };
     };
 

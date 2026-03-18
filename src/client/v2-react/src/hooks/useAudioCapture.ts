@@ -47,7 +47,10 @@ export function useAudioCapture({
       processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
 
       processorRef.current.onaudioprocess = (event) => {
-        if (!isRecordingRef.current) return;
+        if (!isRecordingRef.current) {
+          console.log('[AudioCapture] Not recording, skipping');
+          return;
+        }
         
         const audioData = event.inputBuffer.getChannelData(0);
         
@@ -58,16 +61,22 @@ export function useAudioCapture({
         }
         energy = Math.sqrt(energy / audioData.length);
 
+        console.log('[AudioCapture] Energy:', energy, 'Samples:', audioData.length);
+
         // VAD logic - simplified
         if (energy > 0.01) {
           lastSoundTimeRef.current = Date.now();
+          console.log('[AudioCapture] Speech detected');
         } else if (Date.now() - lastSoundTimeRef.current > silenceThreshold) {
+          console.log('[AudioCapture] Silence detected');
           onSilence();
           lastSoundTimeRef.current = Date.now();
         }
 
         // Send audio data
-        onAudioData(float32ToBase64(audioData));
+        const base64 = float32ToBase64(audioData);
+        console.log('[AudioCapture] Sending audio, base64 length:', base64.length);
+        onAudioData(base64);
       };
 
       sourceRef.current.connect(processorRef.current);

@@ -155,8 +155,27 @@ async def index():
 @app.get("/v2")
 @app.get("/v2/")
 async def index_v2():
-    """Serve v2 demo page."""
-    return FileResponse("src/client/v2/index.html")
+    """Serve v2 React demo page."""
+    return FileResponse("src/client/v2-react/dist/index.html")
+
+
+@app.get("/v2/assets/{path:path}")
+@app.get("/assets/{path:path}")
+async def serve_v2_assets(path: str):
+    """Serve v2 React static assets."""
+    asset_path = Path("src/client/v2-react/dist/assets") / path
+    if asset_path.exists():
+        return FileResponse(asset_path)
+    return {"error": "Asset not found"}
+
+
+@app.get("/favicon.svg")
+async def serve_favicon():
+    """Serve favicon."""
+    favicon_path = Path("src/client/v2-react/dist/favicon.svg")
+    if favicon_path.exists():
+        return FileResponse(favicon_path)
+    return {"error": "Favicon not found"}
 
 
 @app.post("/api/keys")
@@ -415,10 +434,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "interrupt_ack"})
                 await cancel_response(send_interrupt_event=True)
 
-            elif msg_type == "audio" and connection_state == "LISTENING":
+            elif msg_type == "audio":
+                logger.debug(f"🎵 Audio received, state={connection_state}, size={len(msg.get('data', ''))}")
+                if connection_state != "LISTENING":
+                    logger.warning(f"⚠️ Audio received but state={connection_state}, expected LISTENING")
+                    continue
+                    
                 audio_bytes = base64.b64decode(msg["data"])
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
                 audio_buffer.append(audio_np)
+                logger.debug(f"📦 Audio buffered, total chunks={len(audio_buffer)}")
 
                 if vad and len(audio_np) > 0:
                     has_speech = vad.is_speech(audio_np)

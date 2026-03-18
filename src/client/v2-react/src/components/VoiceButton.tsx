@@ -73,6 +73,7 @@ export function VoiceButton({ state, onPressStart, onPressEnd, disabled }: Voice
         onMouseLeave={!disabled && isListening ? onPressEnd : undefined}
         onTouchStart={!disabled ? onPressStart : undefined}
         onTouchEnd={!disabled ? onPressEnd : undefined}
+        onClick={!disabled ? onPressStart : undefined}
         whileHover={!disabled ? { scale: 1.05 } : {}}
         whileTap={!disabled ? { scale: 0.95 } : {}}
         animate={{
