@@ -33,13 +33,14 @@
         threshold: 0.012,
         smoothingFrames: 3,
         onSpeechStart: () => {
-            ui.setUserSpeaking(true);
+            // User is actually speaking — animate the indicator
+            ui.setUserSpeakingAnimation(true);
             if (isAiSpeaking) {
                 player.stop();
                 send({ type: 'interrupt' });
             }
         },
-        onSpeechEnd: () => ui.setUserSpeaking(false),
+        onSpeechEnd: () => ui.setUserSpeakingAnimation(false),
     });
 
     function getApiKey() {
@@ -140,6 +141,8 @@
 
         isRecording = true;
         talkButton.setListening(true);
+        // Show indicator immediately when recording starts
+        ui.setUserSpeaking(true);
         send({ type: 'start_listening' });
     }
 
@@ -161,8 +164,9 @@
             audioContext = null;
         }
 
-        // Reset VAD state to clear "user speaking" indicator
+        // Reset VAD state and hide indicator
         vad.reset();
+        ui.setUserSpeakingAnimation(false);
         ui.setUserSpeaking(false);
 
         send({ type: 'stop_listening' });
