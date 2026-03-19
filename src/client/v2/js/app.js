@@ -161,6 +161,10 @@
             audioContext = null;
         }
 
+        // Reset VAD state to clear "user speaking" indicator
+        vad.reset();
+        ui.setUserSpeaking(false);
+
         send({ type: 'stop_listening' });
     }
 
