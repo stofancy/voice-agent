@@ -18,20 +18,7 @@
 <body>
     <!-- Top Bar -->
     <header class="top-bar" id="topBar">
-        <button class="menu-btn" id="menuBtn" aria-label="菜单">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path d="M3 12h18M3 6h18M3 18h18" stroke-width="2" stroke-linecap="round"/>
-            </svg>
-        </button>
         <h1 class="title">OpenClaw Voice</h1>
-        <div class="actions">
-            <button class="icon-btn" id="settingsBtn" aria-label="设置">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                    <circle cx="12" cy="12" r="3" stroke-width="2"/>
-                    <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1m15.5-6.5l-4.5 4.5m-4 4l-4.5 4.5m0-9l4.5 4.5m4 4l4.5 4.5" stroke-width="2" stroke-linecap="round"/>
-                </svg>
-            </button>
-        </div>
     </header>
     
     <!-- Main Content -->
@@ -51,6 +38,17 @@
         
         <!-- Control Area -->
         <div class="control-area">
+            <!-- Continuous Mode Toggle -->
+            <button class="mode-toggle" id="continuousModeBtn" aria-label="连续对话模式" title="连续对话模式">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M17 2l4 4-4 4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M3 11v-1a4 4 0 014-4h14" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M7 22l-4-4 4-4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M21 13v1a4 4 0 01-4 4H3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>连续</span>
+            </button>
+            
             <!-- Interrupt Button -->
             <button class="interrupt-btn" id="interruptBtn" aria-label="打断 AI" style="display: none;">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -115,18 +113,18 @@
     </div>
     
     <!-- Scripts -->
-    <script src="js/sanitize.js?v=202603191735"></script>
-    <script src="components/blocks/TextBlock.js?v=202603191735"></script>
-    <script src="components/blocks/ImageBlock.js?v=202603191735"></script>
-    <script src="components/blocks/LinkBlock.js?v=202603191735"></script>
-    <script src="components/blocks/VideoBlock.js?v=202603191735"></script>
-    <script src="components/blocks/HtmlBlock.js?v=202603191735"></script>
-    <script src="components/MessageBubble.js?v=202603191735"></script>
-    <script src="components/TalkButton.js?v=202603191735"></script>
-    <script src="components/InterruptButton.js?v=202603191735"></script>
-    <script src="js/vad.js?v=202603191735"></script>
-    <script src="js/tts.js?v=202603191735"></script>
-    <script src="js/ui.js?v=202603191735"></script>
-    <script src="js/app.js?v=202603191735"></script>
+    <script src="js/sanitize.js?v=202603191755"></script>
+    <script src="components/blocks/TextBlock.js?v=202603191755"></script>
+    <script src="components/blocks/ImageBlock.js?v=202603191755"></script>
+    <script src="components/blocks/LinkBlock.js?v=202603191755"></script>
+    <script src="components/blocks/VideoBlock.js?v=202603191755"></script>
+    <script src="components/blocks/HtmlBlock.js?v=202603191755"></script>
+    <script src="components/MessageBubble.js?v=202603191755"></script>
+    <script src="components/TalkButton.js?v=202603191755"></script>
+    <script src="components/InterruptButton.js?v=202603191755"></script>
+    <script src="js/vad.js?v=202603191755"></script>
+    <script src="js/tts.js?v=202603191755"></script>
+    <script src="js/ui.js?v=202603191755"></script>
+    <script src="js/app.js?v=202603191755"></script>
 </body>
 </html>

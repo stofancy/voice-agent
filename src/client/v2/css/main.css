@@ -37,7 +37,7 @@ body {
     z-index: 10;
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     padding: 14px 16px;
     backdrop-filter: blur(8px);
     background: rgba(10, 10, 15, 0.8);
@@ -139,10 +139,41 @@ body {
 }
 
 .control-area {
-    display: grid;
-    justify-items: center;
-    gap: 12px;
-    padding-top: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 20px;
+}
+
+.mode-toggle {
+    border: 2px solid rgba(255, 255, 255, 0.18);
+    border-radius: 999px;
+    background: rgba(26, 26, 46, 0.6);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.mode-toggle.active {
+    border-color: var(--accent-primary);
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent-primary);
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+}
+
+.mode-toggle:hover {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.mode-toggle.active:hover {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 24px rgba(0, 212, 255, 0.4);
 }
 
 .talk-btn {
