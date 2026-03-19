@@ -2,6 +2,7 @@
     const talkBtnEl = document.getElementById('talkBtn');
     const interruptBtnEl = document.getElementById('interruptBtn');
     const clearHistoryBtnEl = document.getElementById('clearHistoryBtn');
+    const continuousModeBtnEl = document.getElementById('continuousModeBtn');
 
     const talkButton = new window.TalkButton(talkBtnEl);
     const ui = new window.UIController();
@@ -18,6 +19,8 @@
     let isAiSpeaking = false;
     let ttsEndReceived = false;
     let touchHandled = false;
+    let continuousMode = false;  // Continuous conversation mode
+    let autoRestartListening = false;  // Auto-restart after AI finishes speaking
 
     const player = new window.PCMPlayer({
         sampleRate: 24000,
@@ -30,17 +33,21 @@
     });
 
     const vad = new window.EnergyVAD({
-        threshold: 0.012,
-        smoothingFrames: 3,
+        threshold: 0.003,
+        smoothingFrames: 1,
         onSpeechStart: () => {
             // User is actually speaking — animate the indicator
-            ui.setUserSpeakingAnimation(true);
+            ui.setUserSpeakingVolume(1);  // Full volume on speech detected
             if (isAiSpeaking) {
                 player.stop();
                 send({ type: 'interrupt' });
             }
+            // In continuous mode, auto-start recording if not already recording
+            if (continuousMode && !isRecording && !isAiSpeaking) {
+                startRecording();
+            }
         },
-        onSpeechEnd: () => ui.setUserSpeakingAnimation(false),
+        onSpeechEnd: () => ui.setUserSpeakingVolume(0.3),  // Return to ambient level
     });
 
     function getApiKey() {
@@ -110,6 +117,17 @@
     function finishSpeaking() {
         ttsEndReceived = false;
         setAiSpeaking(false);
+        
+        // In continuous mode, auto-restart listening after AI finishes
+        if (continuousMode && autoRestartListening) {
+            autoRestartListening = false;
+            // Small delay to ensure clean state
+            setTimeout(() => {
+                if (!isRecording && !isAiSpeaking) {
+                    startRecording();
+                }
+            }, 200);
+        }
     }
 
     async function startRecording() {
@@ -173,6 +191,11 @@
         ui.setUserSpeaking(false);
 
         send({ type: 'stop_listening' });
+        
+        // In continuous mode, mark that we should restart after AI finishes
+        if (continuousMode) {
+            autoRestartListening = true;
+        }
     }
 
     function setAiSpeaking(speaking) {
@@ -241,6 +264,21 @@
         setAiSpeaking(false);
     });
     interruptButton.setVisible(false);
+
+    // Continuous mode toggle
+    if (continuousModeBtnEl) {
+        continuousModeBtnEl.addEventListener('click', () => {
+            continuousMode = !continuousMode;
+            continuousModeBtnEl.classList.toggle('active', continuousMode);
+            // Update UI hint
+            if (continuousMode) {
+                continuousModeBtnEl.title = '连续对话模式：AI 说完后自动开始录音';
+            } else {
+                continuousModeBtnEl.title = '连续对话模式';
+                autoRestartListening = false;
+            }
+        });
+    }
 
     // Mouse: hold-to-talk (mousedown start, mouseup stop)
     // Skip if touch already handled (prevent duplicate on mobile)
