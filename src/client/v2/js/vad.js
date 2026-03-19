@@ -1,7 +1,9 @@
 (function () {
     function EnergyVAD(options) {
-        this.threshold = options && options.threshold ? options.threshold : 0.012;
-        this.smoothingFrames = options && options.smoothingFrames ? options.smoothingFrames : 3;
+        // Lower threshold (0.006) for more sensitive detection
+        // Reduced smoothing (2 frames) for faster response
+        this.threshold = options && options.threshold ? options.threshold : 0.006;
+        this.smoothingFrames = options && options.smoothingFrames ? options.smoothingFrames : 2;
         this.onSpeechStart = options && options.onSpeechStart ? options.onSpeechStart : function () {};
         this.onSpeechEnd = options && options.onSpeechEnd ? options.onSpeechEnd : function () {};
 
