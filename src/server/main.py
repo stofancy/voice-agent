@@ -49,28 +49,37 @@ class Settings(BaseSettings):
     require_auth: bool = False
     master_key: Optional[str] = None
 
-    bailian_api_key: Optional[str] = None
-
-    stt_model: str = "qwen3-asr-flash"
+    stt_provider: str
+    stt_api_key: str
+    stt_model: Optional[str] = None
+    stt_base_url: Optional[str] = None
     stt_language: str = "zh"
 
-    tts_model: str = "qwen3-tts-flash"
-    tts_voice: str = "Cherry"
+    tts_provider: str
+    tts_api_key: str
+    tts_model: Optional[str] = None
+    tts_voice: Optional[str] = None
+    tts_base_url: Optional[str] = None
     tts_language: str = "Chinese"
+
+    llm_provider: str
+    llm_api_key: str
+    llm_model: Optional[str] = None
+    llm_base_url: Optional[str] = None
 
     sample_rate: int = 16000
 
     class Config:
         env_prefix = "OPENCLAW_"
         env_file = ".env"
-        extra = "allow"  # Allow extra fields for compatibility
+        extra = "allow"
 
 
 settings = Settings()
 app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
-stt = None   # BaseSTT instance, created by stt_factory
-tts = None   # BaseTTS instance, created by tts_factory
+stt = None  # BaseSTT instance, created by stt_factory
+tts = None  # BaseTTS instance, created by tts_factory
 backend = None  # BaseLLM instance, created by llm_factory
 vad: Optional[VoiceActivityDetector] = None
 
@@ -88,53 +97,40 @@ async def startup():
     else:
         logger.warning("⚠️ Authentication DISABLED (dev mode)")
 
-    logger.info(f"Loading STT: {settings.stt_model}")
+    logger.info(f"Loading STT: provider={settings.stt_provider}, model={settings.stt_model}")
     stt = create_stt(
-        api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
+        provider=settings.stt_provider,
+        api_key=settings.stt_api_key,
         model=settings.stt_model,
+        base_url=settings.stt_base_url,
         language=settings.stt_language,
     )
 
     tts_instructions = os.getenv("OPENCLAW_TTS_INSTRUCTIONS")
-    logger.info(f"Loading TTS: {settings.tts_model}")
+    logger.info(f"Loading TTS: provider={settings.tts_provider}, model={settings.tts_model}")
     tts = create_tts(
-        api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
+        provider=settings.tts_provider,
+        api_key=settings.tts_api_key,
         model=settings.tts_model,
         voice=settings.tts_voice,
+        base_url=settings.tts_base_url,
         language_type=settings.tts_language,
         instructions=tts_instructions,
     )
 
-    gateway_url = os.getenv("OPENCLAW_GATEWAY_URL")
-    gateway_token = os.getenv("OPENCLAW_GATEWAY_TOKEN")
-
-    if gateway_url and gateway_token:
-        logger.info(f"🦞 Connecting to OpenClaw Gateway: {gateway_url}")
-        backend = create_llm(
-            url=f"{gateway_url}/v1",
-            model="openclaw:main",
-            api_key=gateway_token,
-            system_prompt=(
-                "This conversation is happening via real-time voice chat. "
-                "Keep responses concise and conversational — a few sentences "
-                "at most unless the topic genuinely needs depth. "
-                "No markdown, bullet points, code blocks, or special formatting."
-            ),
-        )
-    else:
-        logger.info("🔌 No Gateway configured - Using Bailian API directly")
-        fallback_api_key = os.getenv("ALI_BAILIAN_API_KEY") or os.getenv("OPENAI_API_KEY")
-        if not fallback_api_key:
-            raise ValueError("ALI_BAILIAN_API_KEY or OPENAI_API_KEY required - no AI backend configured")
-        backend = create_llm(
-            url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model="qwen3.5-flash",
-            api_key=fallback_api_key,
-            system_prompt=(
-                "You are a helpful voice assistant. Keep responses concise and conversational. "
-                "Aim for 1-2 sentences unless more detail is needed."
-            ),
-        )
+    logger.info(f"Loading LLM: provider={settings.llm_provider}, model={settings.llm_model}")
+    backend = create_llm(
+        provider=settings.llm_provider,
+        api_key=settings.llm_api_key,
+        model=settings.llm_model,
+        base_url=settings.llm_base_url,
+        system_prompt=(
+            "This conversation is happening via real-time voice chat. "
+            "Keep responses concise and conversational — a few sentences "
+            "at most unless the topic genuinely needs depth. "
+            "No markdown, bullet points, code blocks, or special formatting."
+        ),
+    )
 
     logger.info("Loading VAD model")
     vad = VoiceActivityDetector()
@@ -157,7 +153,6 @@ async def shutdown():
 async def index():
     """Serve v1 demo page."""
     return FileResponse("src/client/index.html")
-
 
 
 @app.post("/api/keys")
