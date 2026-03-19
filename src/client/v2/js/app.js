@@ -263,17 +263,6 @@
         stopRecording();
     });
 
-    // Click toggle: tap button to toggle recording (for accessibility / quick toggle)
-    talkBtnEl.addEventListener('click', (event) => {
-        // Skip if touch already handled (prevent duplicate on mobile)
-        if (touchHandled) return;
-        if (isRecording) {
-            stopRecording();
-        } else {
-            startRecording();
-        }
-    });
-
     // Keyboard: Space toggle (press once to start, press again to stop)
     document.addEventListener('keydown', (event) => {
         if (event.code === 'Space' && !event.repeat) {
