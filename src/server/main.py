@@ -159,12 +159,6 @@ async def index():
     return FileResponse("src/client/index.html")
 
 
-@app.get("/v2")
-@app.get("/v2/")
-async def index_v2():
-    """Serve v2 demo page."""
-    return FileResponse("src/client/v2/index.html")
-
 
 @app.post("/api/keys")
 async def create_api_key(
@@ -246,7 +240,6 @@ async def _validate_ws_auth(websocket: WebSocket) -> Optional[APIKey]:
 
 @app.websocket("/ws")
 @app.websocket("/voice/ws")
-@app.websocket("/v2/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """Handle voice WebSocket connections for v1 and v2."""
     api_key = await _validate_ws_auth(websocket)
@@ -522,6 +515,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 client_dir = Path(__file__).parent.parent / "client"
 if client_dir.exists():
+    v2_dir = client_dir / "v2"
+    if v2_dir.exists():
+        app.mount("/v2", StaticFiles(directory=str(v2_dir), html=True), name="v2-static")
     app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
 
 
