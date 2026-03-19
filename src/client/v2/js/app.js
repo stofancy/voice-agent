@@ -265,8 +265,8 @@
 
     // Click toggle: tap button to toggle recording (for accessibility / quick toggle)
     talkBtnEl.addEventListener('click', (event) => {
-        // Only trigger on actual click, not after touchend
-        if (event.detail === 0) return; // Ignore synthetic click from touch
+        // Skip if touch already handled (prevent duplicate on mobile)
+        if (touchHandled) return;
         if (isRecording) {
             stopRecording();
         } else {
