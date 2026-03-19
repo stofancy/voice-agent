@@ -30,23 +30,21 @@ class BailianTTS(BaseTTS):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "qwen3-tts-flash",
-        voice: str = "Cherry",
+        api_key: str,
+        base_url: str,
+        model: str,
+        voice: Optional[str] = None,
         language_type: str = "Chinese",
         instructions: Optional[str] = None,
         **kwargs,
     ):
-        self.api_key = api_key or os.environ.get("ALI_BAILIAN_API_KEY")
+        self.api_key = api_key
         self.model = model
-        self.voice = voice
+        self.voice = voice or "Cherry"
         self.language_type = language_type
         self.instructions = instructions
+        self.api_url = base_url
         self._session: Optional[aiohttp.ClientSession] = None
-        self.api_url = "https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation"
-
-        if not self.api_key:
-            raise ValueError("ALI_BAILIAN_API_KEY not set")
 
         instruct_info = f", instructions: {self.instructions[:30]}..." if self.instructions else ""
         logger.info(f"✅ BailianTTS ready (model={self.model}, voice={self.voice}{instruct_info})")
@@ -98,11 +96,7 @@ class BailianTTS(BaseTTS):
                     if data and data != "[DONE]":
                         try:
                             chunk = json.loads(data)
-                            audio_data = (
-                                chunk.get("output", {})
-                                .get("audio", {})
-                                .get("data", "")
-                            )
+                            audio_data = chunk.get("output", {}).get("audio", {}).get("data", "")
                             if audio_data:
                                 yield base64.b64decode(audio_data)
                         except json.JSONDecodeError:
