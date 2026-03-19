@@ -127,7 +127,8 @@
         const AudioCtx = window.AudioContext || window.webkitAudioContext;
         audioContext = new AudioCtx({ sampleRate: 16000 });
         source = audioContext.createMediaStreamSource(stream);
-        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        // Reduced bufferSize from 4096 to 1024 for smoother animation (64ms = ~16fps)
+        processor = audioContext.createScriptProcessor(1024, 1, 1);
 
         processor.onaudioprocess = (event) => {
             if (!isRecording) return;
