@@ -48,6 +48,9 @@
 
     UIController.prototype.setUserSpeaking = function (active) {
         this.userSpeakingIndicator.style.display = active ? 'block' : 'none';
+    };
+
+    UIController.prototype.setUserSpeakingAnimation = function (active) {
         this.userSpeakingIndicator.classList.toggle('active', Boolean(active));
     };
 
