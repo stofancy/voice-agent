@@ -225,3 +225,17 @@ body {
     align-items: center;
     gap: 8px;
 }
+
+.connection-status {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    text-align: center;
+    padding: 8px;
+    background: rgba(255, 61, 95, 0.9);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    z-index: 100;
+}
