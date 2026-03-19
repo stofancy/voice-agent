@@ -4,7 +4,6 @@
 
     const talkButton = new window.TalkButton(talkBtnEl);
     const ui = new window.UIController();
-    const player = new window.PCMPlayer();
 
     let interruptButton;
     let ws = null;
@@ -16,6 +15,17 @@
     let assistantStreamingText = '';
     let assistantStreamingMessageEl = null;
     let isAiSpeaking = false;
+    let ttsEndReceived = false;
+
+    const player = new window.PCMPlayer({
+        sampleRate: 24000,
+        onAllEnded: function () {
+            // Audio queue drained — if backend already sent tts_end, finalize now
+            if (ttsEndReceived) {
+                finishSpeaking();
+            }
+        },
+    });
 
     const vad = new window.EnergyVAD({
         threshold: 0.012,
@@ -64,6 +74,11 @@
             binary += String.fromCharCode(bytes[i]);
         }
         return btoa(binary);
+    }
+
+    function finishSpeaking() {
+        ttsEndReceived = false;
+        setAiSpeaking(false);
     }
 
     async function startRecording() {
@@ -143,10 +158,15 @@
                 player.enqueue(msg.data, msg.sample_rate);
                 break;
             case 'tts_start':
+                ttsEndReceived = false;
                 setAiSpeaking(true);
                 break;
             case 'tts_end':
-                setAiSpeaking(false);
+                // Don't immediately stop speaking — wait for audio queue to drain
+                ttsEndReceived = true;
+                if (!player.isPlaying) {
+                    finishSpeaking();
+                }
                 break;
             case 'response_complete':
                 if (assistantStreamingMessageEl) {
@@ -156,6 +176,8 @@
                 }
                 break;
             case 'interrupt_complete':
+                ttsEndReceived = false;
+                player.stop();
                 setAiSpeaking(false);
                 break;
             default:
@@ -166,6 +188,7 @@
     interruptButton = new window.InterruptButton(interruptBtnEl, () => {
         player.stop();
         send({ type: 'interrupt' });
+        ttsEndReceived = false;
         setAiSpeaking(false);
     });
     interruptButton.setVisible(false);
