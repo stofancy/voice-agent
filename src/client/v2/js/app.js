@@ -16,6 +16,7 @@
     let assistantStreamingMessageEl = null;
     let isAiSpeaking = false;
     let ttsEndReceived = false;
+    let touchHandled = false;
 
     const player = new window.PCMPlayer({
         sampleRate: 24000,
@@ -230,14 +231,27 @@
     interruptButton.setVisible(false);
 
     // Mouse: hold-to-talk (mousedown start, mouseup stop)
-    talkBtnEl.addEventListener('mousedown', () => startRecording());
-    talkBtnEl.addEventListener('mouseup', () => stopRecording());
-    talkBtnEl.addEventListener('mouseleave', () => stopRecording());
+    // Skip if touch already handled (prevent duplicate on mobile)
+    talkBtnEl.addEventListener('mousedown', () => {
+        if (touchHandled) return;
+        startRecording();
+    });
+    talkBtnEl.addEventListener('mouseup', () => {
+        if (touchHandled) return;
+        stopRecording();
+    });
+    talkBtnEl.addEventListener('mouseleave', () => {
+        if (touchHandled) return;
+        stopRecording();
+    });
 
     // Touch: hold-to-talk with preventDefault
     talkBtnEl.addEventListener('touchstart', (event) => {
+        touchHandled = true;
         event.preventDefault();
         startRecording();
+        // Clear flag after a short delay to allow mouse events on desktop
+        setTimeout(() => { touchHandled = false; }, 500);
     }, { passive: false });
     talkBtnEl.addEventListener('touchend', (event) => {
         event.preventDefault();
