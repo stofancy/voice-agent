@@ -28,7 +28,7 @@ from . import perf_logger
 from .auth import APIKey, load_keys_from_env, token_manager
 from .backend import AIBackend
 from .bailian_stt import BailianSTT
-from .bailian_tts import BailianTTS
+from .tts_factory import create_tts
 from .text_utils import clean_for_speech
 from .vad import VoiceActivityDetector
 
@@ -70,7 +70,7 @@ settings = Settings()
 app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
 stt: Optional[BailianSTT] = None
-tts: Optional[BailianTTS] = None
+tts = None  # BaseTTS instance, created by tts_factory
 backend: Optional[AIBackend] = None
 vad: Optional[VoiceActivityDetector] = None
 
@@ -96,8 +96,8 @@ async def startup():
     )
 
     tts_instructions = os.getenv("OPENCLAW_TTS_INSTRUCTIONS")
-    logger.info(f"Loading Bailian TTS: {settings.tts_model}")
-    tts = BailianTTS(
+    logger.info(f"Loading TTS: {settings.tts_model}")
+    tts = create_tts(
         api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
         model=settings.tts_model,
         voice=settings.tts_voice,
@@ -310,8 +310,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     last_perf_data = perf_data
                 return
 
-            # ── LLM stage ───────────────────────────────────────────
+            # ── LLM + TTS stage (unified stream interface) ─────────
             full_response = ""
+            tts_stream = tts.create_stream()
+
             async for chunk in backend.chat_stream(transcript):
                 full_response += chunk
                 if perf_logger.is_enabled() and t_llm_first is None:
@@ -319,6 +321,8 @@ async def websocket_endpoint(websocket: WebSocket):
                     perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
                 if SUBTITLE_STREAMING:
                     await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
+                # Feed LLM output to TTS in real-time
+                tts_stream.feed(chunk)
 
             if perf_logger.is_enabled():
                 t_llm_end = time.perf_counter()
@@ -328,12 +332,14 @@ async def websocket_endpoint(websocket: WebSocket):
             if not SUBTITLE_STREAMING:
                 await websocket.send_json({"type": "response_chunk", "text": full_response})
 
-            speech_text = clean_for_speech(full_response)
+            # Signal TTS that all text has been sent
+            tts_stream.finish()
+
             tts_started = True
             connection_state = "SPEAKING"
             await websocket.send_json({"type": "tts_start"})
 
-            # ── TTS stage ───────────────────────────────────────────
+            # ── TTS audio output ────────────────────────────────────
             if perf_logger.is_enabled():
                 t_tts_first = None
                 t_tts_end = None
@@ -345,7 +351,7 @@ async def websocket_endpoint(websocket: WebSocket):
             first_chunk_received = False
             buffer_start_time: Optional[float] = None
 
-            async for audio_chunk in tts.synthesize(speech_text, stream=TTS_STREAMING):
+            async for audio_chunk in tts_stream:
                 buffer.extend(audio_chunk)
                 audio_bytes_total += len(audio_chunk)
 
