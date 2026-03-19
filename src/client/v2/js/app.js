@@ -55,10 +55,38 @@
         return `${protocol}//${window.location.host}${path}`;
     }
 
+    function resetState() {
+        isRecording = false;
+        isAiSpeaking = false;
+        ttsEndReceived = false;
+        assistantStreamingText = '';
+        assistantStreamingMessageEl = null;
+        player.stop();
+        talkButton.setListening(false);
+        talkButton.setSpeaking(false);
+        interruptButton && interruptButton.setVisible(false);
+        ui.setUserSpeaking(false);
+    }
+
     function connect() {
         ws = new WebSocket(wsUrl());
         ws.onmessage = (event) => handleMessage(JSON.parse(event.data));
-        ws.onclose = () => setTimeout(connect, 1500);
+        ws.onclose = (event) => {
+            resetState();
+            if (event.code === 4001) {
+                ui.showStatus('API key required');
+            } else if (event.code === 4002) {
+                ui.showStatus('Invalid API key');
+            } else if (event.code === 4003) {
+                ui.showStatus('Rate limited — please wait');
+            } else {
+                ui.showStatus('Reconnecting...');
+                setTimeout(connect, 1500);
+            }
+        };
+        ws.onopen = () => {
+            ui.hideStatus();
+        };
     }
 
     function send(payload) {

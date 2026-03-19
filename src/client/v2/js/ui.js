@@ -51,5 +51,21 @@
         this.userSpeakingIndicator.classList.toggle('active', Boolean(active));
     };
 
+    UIController.prototype.showStatus = function (text) {
+        if (!this._statusEl) {
+            this._statusEl = document.createElement('div');
+            this._statusEl.className = 'connection-status';
+            document.body.appendChild(this._statusEl);
+        }
+        this._statusEl.textContent = text;
+        this._statusEl.style.display = 'block';
+    };
+
+    UIController.prototype.hideStatus = function () {
+        if (this._statusEl) {
+            this._statusEl.style.display = 'none';
+        }
+    };
+
     window.UIController = UIController;
 })();
