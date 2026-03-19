@@ -19,7 +19,7 @@ from dashscope.audio.qwen_tts_realtime import (
 )
 from loguru import logger
 
-from .tts_base import BaseTTS, TTSStream
+from .base import BaseTTS, TTSStream
 
 WS_URL = os.getenv(
     "OPENCLAW_TTS_REALTIME_URL",
