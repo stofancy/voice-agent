@@ -42,5 +42,11 @@
         return this.speaking;
     };
 
+    EnergyVAD.prototype.reset = function () {
+        this.speaking = false;
+        this.speechFrames = 0;
+        this.silenceFrames = 0;
+    };
+
     window.EnergyVAD = EnergyVAD;
 })();
