@@ -132,7 +132,9 @@
         processor.onaudioprocess = (event) => {
             if (!isRecording) return;
             const audioData = event.inputBuffer.getChannelData(0);
-            vad.update(audioData);
+            const vadResult = vad.update(audioData);
+            // Update volume indicator in real-time (0-1 normalized)
+            ui.setUserSpeakingVolume(Math.min(1, vadResult.energy * 50));
             send({ type: 'audio', data: float32ToBase64(audioData) });
         };
 
@@ -166,7 +168,7 @@
 
         // Reset VAD state and hide indicator
         vad.reset();
-        ui.setUserSpeakingAnimation(false);
+        ui.setUserSpeakingVolume(0);  // Reset bars to minimum
         ui.setUserSpeaking(false);
 
         send({ type: 'stop_listening' });

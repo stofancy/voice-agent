@@ -14,7 +14,7 @@
 
     EnergyVAD.prototype.update = function (float32Array) {
         if (!float32Array || !float32Array.length) {
-            return this.speaking;
+            return { speaking: this.speaking, energy: 0 };
         }
 
         let total = 0;
@@ -41,7 +41,7 @@
             }
         }
 
-        return this.speaking;
+        return { speaking: this.speaking, energy: energy };
     };
 
     EnergyVAD.prototype.reset = function () {
