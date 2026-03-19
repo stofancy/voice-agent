@@ -208,7 +208,15 @@
                 player.stop();
                 setAiSpeaking(false);
                 break;
-            default:
+            case 'listening_started':
+                break;
+            case 'listening_stopped':
+                // Turn is fully done — ensure clean state
+                if (!isAiSpeaking && !player.isPlaying) {
+                    ttsEndReceived = false;
+                }
+                break;
+            case 'pong':
                 break;
         }
     }
