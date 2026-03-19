@@ -22,29 +22,28 @@ class BailianSTT(BaseSTT):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "qwen3-asr-flash",
+        api_key: str,
+        base_url: str,
+        model: str,
         language: str = "zh",
         **kwargs,
     ):
-        self.api_key = api_key or os.environ.get("ALI_BAILIAN_API_KEY")
+        self.api_key = api_key
+        self.base_url = base_url
         self.model = model
         self.language = language
         self._client = None
         self._setup_client()
 
     def _setup_client(self):
-        if not self.api_key:
-            raise ValueError("ALI_BAILIAN_API_KEY not set")
-
         try:
             from openai import AsyncOpenAI
 
             self._client = AsyncOpenAI(
                 api_key=self.api_key,
-                base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                base_url=self.base_url,
             )
-            logger.info(f"✅ BailianSTT ready (model={self.model})")
+            logger.info(f"✅ BailianSTT ready (url={self.base_url}, model={self.model})")
         except ImportError:
             logger.error("❌ openai package not installed")
             self._client = None
@@ -79,7 +78,7 @@ class BailianSTT(BaseSTT):
             data_uri = f"data:audio/wav;base64,{base64_audio}"
 
             logger.debug(
-                f"📤 STT request: {len(audio_data)} samples, {len(audio_data)/16000:.2f}s"
+                f"📤 STT request: {len(audio_data)} samples, {len(audio_data) / 16000:.2f}s"
             )
 
             response = await self._client.chat.completions.create(
@@ -87,9 +86,7 @@ class BailianSTT(BaseSTT):
                 messages=[
                     {
                         "role": "user",
-                        "content": [
-                            {"type": "input_audio", "input_audio": {"data": data_uri}}
-                        ],
+                        "content": [{"type": "input_audio", "input_audio": {"data": data_uri}}],
                     }
                 ],
                 extra_body={

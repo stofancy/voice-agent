@@ -7,7 +7,6 @@ LLM 每产出一个 token 就 feed() 给 TTS，TTS 自行决定何时开始合�
 
 import asyncio
 import base64
-import os
 import threading
 from typing import AsyncGenerator, Optional
 
@@ -20,11 +19,6 @@ from dashscope.audio.qwen_tts_realtime import (
 from loguru import logger
 
 from .base import BaseTTS, TTSStream
-
-WS_URL = os.getenv(
-    "OPENCLAW_TTS_REALTIME_URL",
-    "wss://dashscope.aliyuncs.com/api-ws/v1/realtime",
-)
 
 
 class RealtimeTTSStream(TTSStream):
@@ -41,6 +35,7 @@ class RealtimeTTSStream(TTSStream):
         model: str,
         voice: str,
         api_key: str,
+        base_url: str,
         language_type: str = "Chinese",
         instructions: Optional[str] = None,
     ):
@@ -49,8 +44,8 @@ class RealtimeTTSStream(TTSStream):
         self._api_key = api_key
         self._language_type = language_type
         self._instructions = instructions
+        self._base_url = base_url
 
-        # asyncio Queue 用于 callback 线程 → async 迭代器 桥接
         self._loop: Optional[asyncio.AbstractEventLoop] = None
         self._queue: Optional[asyncio.Queue] = None
         self._tts: Optional[QwenTtsRealtime] = None
@@ -71,7 +66,7 @@ class RealtimeTTSStream(TTSStream):
         self._tts = QwenTtsRealtime(
             model=self._model,
             callback=callback,
-            url=WS_URL,
+            url=self._base_url,
         )
         self._tts.connect()
 
@@ -159,23 +154,24 @@ class BailianTTSRealtime(BaseTTS):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        model: str = "qwen3-tts-flash-realtime",
-        voice: str = "Cherry",
+        api_key: str,
+        base_url: str,
+        model: str,
+        voice: Optional[str] = None,
         language_type: str = "Chinese",
         instructions: Optional[str] = None,
         **kwargs,
     ):
-        self._api_key = api_key or os.environ.get("ALI_BAILIAN_API_KEY")
+        self._api_key = api_key
         self._model = model
-        self._voice = voice
+        self._voice = voice or "Cherry"
         self._language_type = language_type
         self._instructions = instructions
+        self._base_url = base_url
 
-        if not self._api_key:
-            raise ValueError("ALI_BAILIAN_API_KEY not set")
-
-        instruct_info = f", instructions: {self._instructions[:30]}..." if self._instructions else ""
+        instruct_info = (
+            f", instructions: {self._instructions[:30]}..." if self._instructions else ""
+        )
         logger.info(
             f"✅ BailianTTSRealtime ready (model={self._model}, voice={self._voice}{instruct_info})"
         )
@@ -185,6 +181,7 @@ class BailianTTSRealtime(BaseTTS):
             model=self._model,
             voice=self._voice,
             api_key=self._api_key,
+            base_url=self._base_url,
             language_type=self._language_type,
             instructions=self._instructions,
         )
