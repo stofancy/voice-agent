@@ -17,3 +17,4 @@ httpx[http2]>=0.25.0
 # Utilities
 python-dotenv>=1.0.0
 loguru>=0.7.2
+dashscope>=1.23.9
