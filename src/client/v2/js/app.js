@@ -38,7 +38,7 @@
     function wsUrl() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const key = getApiKey();
-        const path = '/v2/ws';
+        const path = '/ws';
         if (key) {
             return `${protocol}//${window.location.host}${path}?api_key=${encodeURIComponent(key)}`;
         }
