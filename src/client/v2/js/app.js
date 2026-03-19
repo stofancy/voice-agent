@@ -229,25 +229,41 @@
     });
     interruptButton.setVisible(false);
 
+    // Mouse: hold-to-talk (mousedown start, mouseup stop)
     talkBtnEl.addEventListener('mousedown', () => startRecording());
     talkBtnEl.addEventListener('mouseup', () => stopRecording());
     talkBtnEl.addEventListener('mouseleave', () => stopRecording());
+
+    // Touch: hold-to-talk with preventDefault
     talkBtnEl.addEventListener('touchstart', (event) => {
         event.preventDefault();
         startRecording();
     }, { passive: false });
-    talkBtnEl.addEventListener('touchend', () => stopRecording());
+    talkBtnEl.addEventListener('touchend', (event) => {
+        event.preventDefault();
+        stopRecording();
+    });
 
+    // Click toggle: tap button to toggle recording (for accessibility / quick toggle)
+    talkBtnEl.addEventListener('click', (event) => {
+        // Only trigger on actual click, not after touchend
+        if (event.detail === 0) return; // Ignore synthetic click from touch
+        if (isRecording) {
+            stopRecording();
+        } else {
+            startRecording();
+        }
+    });
+
+    // Keyboard: Space toggle (press once to start, press again to stop)
     document.addEventListener('keydown', (event) => {
         if (event.code === 'Space' && !event.repeat) {
             event.preventDefault();
-            if (!isRecording) startRecording();
-        }
-    });
-    document.addEventListener('keyup', (event) => {
-        if (event.code === 'Space') {
-            event.preventDefault();
-            stopRecording();
+            if (isRecording) {
+                stopRecording();
+            } else {
+                startRecording();
+            }
         }
     });
 
