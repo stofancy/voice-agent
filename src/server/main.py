@@ -26,9 +26,9 @@ from pydantic_settings import BaseSettings
 
 from . import perf_logger
 from .auth import APIKey, load_keys_from_env, token_manager
-from .backend import AIBackend
-from .bailian_stt import BailianSTT
-from .tts_factory import create_tts
+from .tts import create_tts
+from .stt import create_stt
+from .llm import create_llm
 from .text_utils import clean_for_speech
 from .vad import VoiceActivityDetector
 
@@ -69,9 +69,9 @@ class Settings(BaseSettings):
 settings = Settings()
 app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
-stt: Optional[BailianSTT] = None
-tts = None  # BaseTTS instance, created by tts_factory
-backend: Optional[AIBackend] = None
+stt = None   # BaseSTT instance, created by stt_factory
+tts = None   # BaseTTS instance, created by tts_factory
+backend = None  # BaseLLM instance, created by llm_factory
 vad: Optional[VoiceActivityDetector] = None
 
 
@@ -88,8 +88,8 @@ async def startup():
     else:
         logger.warning("⚠️ Authentication DISABLED (dev mode)")
 
-    logger.info(f"Loading Bailian STT: {settings.stt_model}")
-    stt = BailianSTT(
+    logger.info(f"Loading STT: {settings.stt_model}")
+    stt = create_stt(
         api_key=settings.bailian_api_key or os.getenv("ALI_BAILIAN_API_KEY"),
         model=settings.stt_model,
         language=settings.stt_language,
@@ -110,8 +110,7 @@ async def startup():
 
     if gateway_url and gateway_token:
         logger.info(f"🦞 Connecting to OpenClaw Gateway: {gateway_url}")
-        backend = AIBackend(
-            backend_type="openai",
+        backend = create_llm(
             url=f"{gateway_url}/v1",
             model="openclaw:main",
             api_key=gateway_token,
@@ -127,8 +126,7 @@ async def startup():
         fallback_api_key = os.getenv("ALI_BAILIAN_API_KEY") or os.getenv("OPENAI_API_KEY")
         if not fallback_api_key:
             raise ValueError("ALI_BAILIAN_API_KEY or OPENAI_API_KEY required - no AI backend configured")
-        backend = AIBackend(
-            backend_type="openai",
+        backend = create_llm(
             url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             model="qwen3.5-flash",
             api_key=fallback_api_key,
@@ -504,7 +502,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         "transcript": last_transcript,
                         "response_length": len(last_response),
                         "tts_model": settings.tts_model,
-                        "llm_model": backend.model if backend else "unknown",
+                        "llm_model": backend.model_name if backend else "unknown",
                         "tts_voice": settings.tts_voice,
                     }
                     perf_logger.log_round(
