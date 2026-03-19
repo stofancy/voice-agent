@@ -50,8 +50,19 @@
         this.userSpeakingIndicator.style.display = active ? 'block' : 'none';
     };
 
-    UIController.prototype.setUserSpeakingAnimation = function (active) {
-        this.userSpeakingIndicator.classList.toggle('active', Boolean(active));
+    UIController.prototype.setUserSpeakingVolume = function (volume) {
+        // Volume: 0.0 - 1.0 (normalized)
+        // Map volume to bar heights (4px to 20px)
+        const bars = this.userSpeakingIndicator.querySelectorAll('.waveform .bar');
+        const baseHeight = 6;  // minimum height
+        const maxHeight = 20;  // maximum height
+        
+        bars.forEach((bar, index) => {
+            // Add some variation between bars for visual interest
+            const variation = Math.sin(Date.now() / 100 + index) * 0.2 + 0.8;
+            const height = baseHeight + (maxHeight - baseHeight) * volume * variation;
+            bar.style.height = Math.max(baseHeight, height) + 'px';
+        });
     };
 
     UIController.prototype.showStatus = function (text) {
