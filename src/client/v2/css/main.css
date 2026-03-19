@@ -242,3 +242,22 @@ body {
     font-weight: 600;
     z-index: 100;
 }
+
+.clear-btn {
+    border: none;
+    border-radius: 10px;
+    background: rgba(255, 61, 95, 0.15);
+    color: var(--danger);
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.clear-btn:hover {
+    background: rgba(255, 61, 95, 0.3);
+    box-shadow: 0 0 0 2px rgba(255, 61, 95, 0.2);
+}

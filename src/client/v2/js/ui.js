@@ -67,5 +67,9 @@
         }
     };
 
+    UIController.prototype.clearMessages = function () {
+        this.messagesContainer.innerHTML = '';
+    };
+
     window.UIController = UIController;
 })();

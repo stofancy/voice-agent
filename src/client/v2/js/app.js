@@ -1,6 +1,7 @@
 (function () {
     const talkBtnEl = document.getElementById('talkBtn');
     const interruptBtnEl = document.getElementById('interruptBtn');
+    const clearHistoryBtnEl = document.getElementById('clearHistoryBtn');
 
     const talkButton = new window.TalkButton(talkBtnEl);
     const ui = new window.UIController();
@@ -286,4 +287,11 @@
     setInterval(() => {
         send({ type: 'ping' });
     }, 30000);
+
+    // Clear history button
+    if (clearHistoryBtnEl) {
+        clearHistoryBtnEl.addEventListener('click', () => {
+            ui.clearMessages();
+        });
+    }
 })();
