@@ -26,6 +26,7 @@ class BailianTTS(BaseTTS):
         "Sarah": "成熟女性",
         "Jack": "沉稳男性",
         "Allie": "活泼女性",
+        "Maia": "四月音色，知性与温柔",
     }
 
     def __init__(

@@ -1,8 +1,8 @@
 """
 Shared fixtures and utilities for E2E backend tests.
 
-All live tests require ALI_BAILIAN_API_KEY to be set:
-  ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/ -v
+All live tests require API keys to be set (via OPENCLAW_*_API_KEY environment variables):
+  OPENCLAW_STT_API_KEY=sk-... OPENCLAW_TTS_API_KEY=sk-... pytest tests/e2e/ -v
 
 Fixtures are function-scoped to prevent aiohttp session closure.
 Logs are written to tests/e2e/test_run.log in real-time.
@@ -230,11 +230,12 @@ def save_report_on_exit(latency_tracker):
 
 @pytest.fixture(scope="session")
 def api_key() -> str:
-    key = os.getenv("ALI_BAILIAN_API_KEY")
+    # Support both new and legacy env var names for backward compatibility
+    key = os.getenv("OPENCLAW_STT_API_KEY") or os.getenv("OPENCLAW_TTS_API_KEY") or os.getenv("ALI_BAILIAN_API_KEY")
     if not key:
         pytest.skip(
-            "ALI_BAILIAN_API_KEY is not set – skipping live E2E tests.\n"
-            "Run with:  ALI_BAILIAN_API_KEY=sk-... pytest tests/e2e/ -v"
+            "OPENCLAW_STT_API_KEY or OPENCLAW_TTS_API_KEY is not set – skipping live E2E tests.\n"
+            "Run with:  OPENCLAW_STT_API_KEY=sk-... OPENCLAW_TTS_API_KEY=sk-... pytest tests/e2e/ -v"
         )
     return key
 
@@ -248,16 +249,26 @@ def audio_fixtures_dir() -> Path:
 
 @pytest.fixture(scope="function")
 async def tts_client(api_key):
-    from src.server.bailian_tts import BailianTTS
-    client = BailianTTS(api_key=api_key, model="qwen3-tts-flash", voice="Cherry")
+    from src.server.tts.bailian_tts import BailianTTS
+    client = BailianTTS(
+        api_key=api_key,
+        base_url="https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation",
+        model="qwen3-tts-flash",
+        voice="Cherry",
+    )
     yield client
     await client.close()
 
 
 @pytest.fixture(scope="function")
 def stt_client(api_key):
-    from src.server.bailian_stt import BailianSTT
-    return BailianSTT(api_key=api_key, model="qwen3-asr-flash", language="zh")
+    from src.server.stt.bailian_stt import BailianSTT
+    return BailianSTT(
+        api_key=api_key,
+        base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+        model="qwen3-asr-flash",
+        language="zh",
+    )
 
 
 # ── Pytest hooks for test lifecycle logging ───────────────────────────────────
@@ -282,9 +293,8 @@ def pytest_runtest_logreport(report):
 
 @pytest.fixture(scope="function")
 async def llm_client(api_key):
-    from src.server.backend import AIBackend
-    client = AIBackend(
-        backend_type="openai",
+    from src.server.llm.openai_llm import OpenAILLM
+    client = OpenAILLM(
         url="https://dashscope.aliyuncs.com/compatible-mode/v1",
         model="qwen-turbo",
         api_key=api_key,

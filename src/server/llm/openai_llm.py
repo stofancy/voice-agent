@@ -69,6 +69,7 @@ class OpenAILLM(BaseLLM):
         messages.extend(self.conversation_history[-10:])
 
         full_response = ""
+        logger.info(f"🔍 LLM request: model={self.model}, url={self.url}, messages={len(messages)}")
         try:
             stream = await self._client.chat.completions.create(
                 model=self.model,
@@ -77,6 +78,7 @@ class OpenAILLM(BaseLLM):
                 temperature=0.7,
                 stream=True,
             )
+            logger.info(f"✅ LLM stream started")
             async for chunk in stream:
                 if chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
@@ -86,8 +88,13 @@ class OpenAILLM(BaseLLM):
             self.conversation_history.append(
                 {"role": "assistant", "content": full_response}
             )
+            logger.info(f"✅ LLM stream complete, response length={len(full_response)}")
         except Exception as e:
-            logger.error(f"LLM streaming error: {e}")
+            logger.error(f"❌ LLM streaming error: {type(e).__name__}: {e}")
+            logger.error(f"   URL: {self.url}")
+            logger.error(f"   Model: {self.model}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             yield "Sorry, I had trouble processing that."
 
     def clear_history(self) -> None:
