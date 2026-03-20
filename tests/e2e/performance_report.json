@@ -1,32 +1,4 @@
 {
-  "generated_at": "2026-03-17T09:08:17Z",
-  "metrics": {
-    "llm_ttft_ms": {
-      "count": 1,
-      "min_ms": 1434.6,
-      "max_ms": 1434.6,
-      "avg_ms": 1434.6,
-      "samples_ms": [
-        1434.6
-      ]
-    },
-    "llm_first_sentence_ms": {
-      "count": 1,
-      "min_ms": 1436.4,
-      "max_ms": 1436.4,
-      "avg_ms": 1436.4,
-      "samples_ms": [
-        1436.4
-      ]
-    },
-    "llm_total_ms": {
-      "count": 1,
-      "min_ms": 1579.8,
-      "max_ms": 1579.8,
-      "avg_ms": 1579.8,
-      "samples_ms": [
-        1579.8
-      ]
-    }
-  }
+  "generated_at": "2026-03-20T12:00:01Z",
+  "metrics": {}
 }

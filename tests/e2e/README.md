@@ -37,7 +37,7 @@ uv pip install -r requirements.txt pytest pytest-asyncio
 
 ```bash
 # With the API key
-ALI_BAILIAN_API_KEY=sk-xxxxxxx .venv/bin/python -m pytest tests/e2e/ -v -s
+OPENCLAW_STT_API_KEY=sk-xxxxxxx .venv/bin/python -m pytest tests/e2e/ -v -s
 
 # Live monitoring in another terminal
 ./scripts/monitor_e2e_tests.sh
@@ -255,7 +255,7 @@ Look for these key patterns in `test_run.log`:
 
 ```bash
 # Set the environment variable
-export ALI_BAILIAN_API_KEY=sk-xxxx
+export OPENCLAW_STT_API_KEY=sk-xxxx
 pytest tests/e2e/ -v
 ```
 
@@ -294,7 +294,7 @@ Example GitHub Actions workflow:
 ```yaml
 - name: Run E2E Backend Tests
   env:
-    ALI_BAILIAN_API_KEY: ${{ secrets.ALI_BAILIAN_API_KEY }}
+    OPENCLAW_STT_API_KEY: ${{ secrets.OPENCLAW_STT_API_KEY }}
   run: |
     pytest tests/e2e/ -v --tb=short
     
