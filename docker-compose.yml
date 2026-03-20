@@ -1,134 +1,84 @@
 # OpenClaw Voice - Full Stack Docker Compose
-# Completely independent deployment - NO host config mounting
-# Based on official Manual flow pattern but with isolated config
 #
 # Usage:
 #   1. cp .env.example .env
-#   2. Edit .env with your Bailian API Key
+#   2. Edit .env with your API keys
 #   3. docker compose up -d
 
 name: openclaw-voice
 
 services:
   # ===========================================
-  # OpenClaw Gateway (Independent Instance)
-  # Uses Docker volume, NOT host ~/.openclaw
+  # OpenClaw Gateway (Local Mode)
+  # Using bind mount for easy configuration
   # ===========================================
   openclaw-gateway:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
-    environment:
-      HOME: /home/node
-      TERM: xterm-256color
-      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
-      # Gateway authentication
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-openclaw-your-gateway-token-here}
-      # Bailian API Key for Gateway models
-      ALI_BAILIAN_API_KEY: ${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
-      # Default model
-      OPENCLAW_DEFAULT_MODEL: ${OPENCLAW_DEFAULT_MODEL:-bailian/qwen3-coder-next}
-      # Allow unconfigured mode (no ~/.openclaw mount needed)
-      OPENCLAW_GATEWAY_ALLOW_UNCONFIGURED: "true"
-      # Control UI for non-loopback access (required for lan bind mode)
-      OPENCLAW_CONTROL_UI_DANGEROUSLY_ALLOW_HOST_HEADER_ORIGIN_FALLBACK: "true"
-      # Gateway mode (local mode for Docker)
-      OPENCLAW_GATEWAY_MODE: "local"
-      # Bind mode
-      OPENCLAW_GATEWAY_BIND: lan
+    image: ghcr.io/openclaw/openclaw:latest
     volumes:
-      # Independent Docker volume - DOES NOT touch host ~/.openclaw
-      - openclaw-gateway-config:/home/node/.openclaw
+      # Bind mount: Gateway configuration (easy to edit)
+      - /home/ztmdsbt/voice-agent-data/gateway-config:/home/node/.openclaw
+      # Volume: Gateway data (sessions, cache, etc.)
+      - openclaw-voice_openclaw-gateway-data:/home/node/.openclaw/data
     ports:
-      - "26523:18789"
-      - "26524:18790"
-    init: true
-    restart: unless-stopped
-    command:
-      [
-        "node",
-        "dist/index.js",
-        "gateway",
-        "--allow-unconfigured",
-        "--bind",
-        "${OPENCLAW_GATEWAY_BIND:-lan}",
-        "--port",
-        "18789",
-      ]
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 60s
+      - "18789:18789"
     networks:
       - openclaw-voice-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   # ===========================================
-  # OpenClaw CLI (Shares network with Gateway)
-  # Used for onboarding and management
-  # ===========================================
-  openclaw-cli:
-    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
-    network_mode: "service:openclaw-gateway"
-    cap_drop:
-      - NET_RAW
-      - NET_ADMIN
-    security_opt:
-      - no-new-privileges:true
-    environment:
-      HOME: /home/node
-      TERM: xterm-256color
-      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-openclaw-your-gateway-token-here}
-      BROWSER: echo
-      TZ: ${OPENCLAW_TZ:-Asia/Shanghai}
-    stdin_open: true
-    tty: true
-    init: true
-    entrypoint: ["node", "dist/index.js"]
-    depends_on:
-      - openclaw-gateway
-
-  # ===========================================
-  # OpenClaw Voice (Bailian STT/TTS)
+  # OpenClaw Voice (Bailian STT/TTS/LLM)
   # Built from local source code
   # ===========================================
   openclaw-voice:
+    depends_on:
+      openclaw-gateway:
+        condition: service_healthy
     build:
       context: .
-      dockerfile: Dockerfile.bailian
+      dockerfile: Dockerfile
     environment:
-      # Bailian API (STT + TTS)
-      - ALI_BAILIAN_API_KEY=${ALI_BAILIAN_API_KEY:-sk-your-api-key-here}
+      # LLM Configuration
+      - OPENCLAW_LLM_PROVIDER=${OPENCLAW_LLM_PROVIDER:-bailian}
+      - OPENCLAW_LLM_API_KEY=${OPENCLAW_LLM_API_KEY:-}
+      - OPENCLAW_LLM_MODEL=${OPENCLAW_LLM_MODEL:-}
+      - OPENCLAW_LLM_BASE_URL=${OPENCLAW_LLM_BASE_URL:-}
       # STT Configuration
-      - OPENCLAW_STT_MODEL=${OPENCLAW_STT_MODEL:-qwen3-asr-flash}
+      - OPENCLAW_STT_PROVIDER=${OPENCLAW_STT_PROVIDER:-bailian}
+      - OPENCLAW_STT_API_KEY=${OPENCLAW_STT_API_KEY:-}
+      - OPENCLAW_STT_MODEL=${OPENCLAW_STT_MODEL:-}
+      - OPENCLAW_STT_BASE_URL=${OPENCLAW_STT_BASE_URL:-}
       - OPENCLAW_STT_LANGUAGE=${OPENCLAW_STT_LANGUAGE:-zh}
       # TTS Configuration
-      - OPENCLAW_TTS_MODEL=${OPENCLAW_TTS_MODEL:-qwen3-tts-flash}
+      - OPENCLAW_TTS_PROVIDER=${OPENCLAW_TTS_PROVIDER:-bailian}
+      - OPENCLAW_TTS_API_KEY=${OPENCLAW_TTS_API_KEY:-}
+      - OPENCLAW_TTS_MODEL=${OPENCLAW_TTS_MODEL:-}
+      - OPENCLAW_TTS_BASE_URL=${OPENCLAW_TTS_BASE_URL:-}
       - OPENCLAW_TTS_VOICE=${OPENCLAW_TTS_VOICE:-Cherry}
       - OPENCLAW_TTS_LANGUAGE=${OPENCLAW_TTS_LANGUAGE:-Chinese}
-      # TTS Voice Instructions (only for qwen3-tts-instruct-flash)
       - OPENCLAW_TTS_INSTRUCTIONS=${OPENCLAW_TTS_INSTRUCTIONS:-}
       # Streaming Configuration
       - OPENCLAW_TTS_STREAMING=${OPENCLAW_TTS_STREAMING:-true}
       - OPENCLAW_SUBTITLE_STREAMING=${OPENCLAW_SUBTITLE_STREAMING:-true}
-      # TTS Buffer Configuration
-      - OPENCLAW_TTS_TIME_BUFFER_SECONDS=${OPENCLAW_TTS_TIME_BUFFER_SECONDS:-0.1}
+      - OPENCLAW_TTS_TIME_BUFFER_SECONDS=${OPENCLAW_TTS_TIME_BUFFER_SECONDS:-0.5}
       - OPENCLAW_TTS_DATA_BUFFER_SIZE=${OPENCLAW_TTS_DATA_BUFFER_SIZE:-8192}
+      - OPENCLAW_TTS_SAMPLE_RATE=${OPENCLAW_TTS_SAMPLE_RATE:-24000}
+      # LLM Backend Configuration
+      - OPENCLAW_BACKEND_TIMEOUT_S=${OPENCLAW_BACKEND_TIMEOUT_S:-30}
+      - OPENCLAW_BACKEND_HTTP2=${OPENCLAW_BACKEND_HTTP2:-true}
       # Performance Logging
       - OPENCLAW_PERF_LOGGING=${OPENCLAW_PERF_LOGGING:-false}
-      # Gateway Connection (same network, use service name)
-      - OPENCLAW_GATEWAY_URL=http://openclaw-gateway:18789
-      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-openclaw-your-gateway-token-here}
+      # Server Configuration
+      - OPENCLAW_PORT=${OPENCLAW_PORT:-8765}
+      - OPENCLAW_REQUIRE_AUTH=${OPENCLAW_REQUIRE_AUTH:-false}
+      - OPENCLAW_MASTER_KEY=${OPENCLAW_MASTER_KEY:-}
     ports:
-      - "${OPENCLAW_VOICE_PORT:-8765}:8765"
-    depends_on:
-      openclaw-gateway:
-        condition: service_healthy
+      - "${OPENCLAW_PORT:-8765}:8765"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8765/"]
@@ -136,13 +86,11 @@ services:
       timeout: 10s
       retries: 3
       start_period: 30s
-    networks:
-      - openclaw-voice-network
 
 networks:
   openclaw-voice-network:
-    driver: bridge
+    external: true
 
 volumes:
-  # Independent Gateway config volume - DOES NOT touch host ~/.openclaw
-  openclaw-gateway-config:
+  openclaw-voice_openclaw-gateway-data:
+    external: true
