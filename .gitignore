@@ -4,6 +4,9 @@ __pycache__/
 .venv/
 venv/
 .env
+.env.local
+.env.docker
+.env.merged
 .env.bailian
 *.egg-info/
 openclaw-gateway-config/openclaw.json

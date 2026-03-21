@@ -1,7 +1,27 @@
 # OpenClaw Voice 项目待办事项
 
-**最后更新**: 2026-03-17 01:45
-**项目状态**: ✅ 部署完成，等待流式字幕测试
+**最后更新**: 2026-03-21
+**项目状态**: 🚧 开发中 - 本地/Docker 配置分离
+
+---
+
+## 🟡 代码优化待办 (来源: Code Review)
+
+### 1. 统一 LLM provider 错误日志处理
+**创建时间**: 2026-03-21
+**状态**: 待处理
+**文件**: `src/server/llm/openai_llm.py`, `src/server/llm/gemini_llm.py`
+
+**问题**: `openai_llm.py` 有详细的错误日志提取，但 `gemini_llm.py` 没有
+**建议**: 提取 HTTP 错误日志为共享工具函数
+
+### 2. 集中化 OPENCLAW_* 环境变量常量
+**创建时间**: 2026-03-21
+**状态**: 待处理
+**文件**: `src/server/`
+
+**问题**: `OPENCLAW_` 前缀在代码中以字符串字面量分散使用
+**建议**: 在 `src/server/constants.py` 中定义常量
 
 ---
 
