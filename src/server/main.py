@@ -67,8 +67,6 @@ class Settings(BaseSettings):
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
 
-    sample_rate: int = 16000
-
     class Config:
         env_prefix = "OPENCLAW_"
         env_file = ".env"

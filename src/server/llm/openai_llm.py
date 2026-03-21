@@ -3,6 +3,7 @@ OpenAI 兼容 LLM — 支持 OpenClaw Gateway 和直连 OpenAI API。
 """
 
 import os
+import traceback
 from typing import AsyncGenerator, Dict, List, Optional
 
 import httpx
@@ -91,9 +92,16 @@ class OpenAILLM(BaseLLM):
             logger.info(f"✅ LLM stream complete, response length={len(full_response)}")
         except Exception as e:
             logger.error(f"❌ LLM streaming error: {type(e).__name__}: {e}")
-            logger.error(f"   URL: {self.url}")
+            logger.error(f"   URL: {self.url}/v1/chat/completions")
             logger.error(f"   Model: {self.model}")
-            import traceback
+            # Try to extract more details from the error
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_data = e.response.json()
+                    logger.error(f"   Response: {error_data}")
+                except Exception:
+                    logger.error(f"   Response status: {e.response.status_code}")
+                    logger.error(f"   Response body: {e.response.text[:500]}")
             logger.error(f"   Traceback: {traceback.format_exc()}")
             yield "Sorry, I had trouble processing that."
 
