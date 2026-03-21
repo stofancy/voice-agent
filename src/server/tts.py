@@ -167,3 +167,26 @@ class ChatterboxTTS:
             logger.debug(f"Mock TTS: '{text[:50]}...'")
             # 0.5 seconds of silence at 24kHz
             return np.zeros(12000, dtype=np.float32)
+
+    async def synthesize_incremental(
+        self,
+        text_chunks: AsyncGenerator[str, None],
+    ) -> AsyncGenerator[bytes, None]:
+        """
+        增量合成：接受文本流，边接收边合成音频流。
+
+        Args:
+            text_chunks: 异步文本块生成器（来自 LLM streaming）
+
+        Yields:
+            音频数据块
+        """
+        # 累积完整文本
+        full_text = ""
+        async for chunk in text_chunks:
+            full_text += chunk
+
+        # 一次性合成
+        if full_text:
+            async for audio_chunk in self.synthesize_stream(full_text):
+                yield audio_chunk
