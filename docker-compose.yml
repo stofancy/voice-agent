@@ -1,31 +1,28 @@
 # OpenClaw Voice - Full Stack Docker Compose
 #
 # Usage:
-#   1. cp .env.example .env
-#   2. Edit .env with your API keys
-#   3. docker compose up -d
+#   1. Edit .env.docker with your API keys
+#   2. Optionally override port mappings in .env.docker:
+#      - OPENCLAW_GATEWAY_PORT: Gateway external port (default: 18789)
+#      - OPENCLAW_VOICE_PORT: Voice external port (default: 8765)
+#   3. ./start.sh docker up
 
 name: openclaw-voice
 
 services:
   # ===========================================
-  # OpenClaw Gateway (Local Mode)
-  # Using bind mount for easy configuration
+  # OpenClaw Gateway
   # ===========================================
   openclaw-gateway:
     image: ghcr.io/openclaw/openclaw:latest
     volumes:
       # Bind mount: Gateway configuration (easy to edit)
       - /home/ztmdsbt/voice-agent-data/gateway-config:/home/node/.openclaw
-      # Volume: Gateway data (sessions, cache, etc.)
-      - openclaw-voice_openclaw-gateway-data:/home/node/.openclaw/data
     ports:
-      - "18789:18789"
-    networks:
-      - openclaw-voice-network
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:18789/"]
+      test: ["CMD-SHELL", "wget --spider --quiet --tries=1 --timeout=5 http://localhost:18789/ || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,55 +39,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    env_file:
+      - .env.docker
     environment:
-      # LLM Configuration
-      - OPENCLAW_LLM_PROVIDER=${OPENCLAW_LLM_PROVIDER:-bailian}
-      - OPENCLAW_LLM_API_KEY=${OPENCLAW_LLM_API_KEY:-}
-      - OPENCLAW_LLM_MODEL=${OPENCLAW_LLM_MODEL:-}
-      - OPENCLAW_LLM_BASE_URL=${OPENCLAW_LLM_BASE_URL:-}
-      # STT Configuration
-      - OPENCLAW_STT_PROVIDER=${OPENCLAW_STT_PROVIDER:-bailian}
-      - OPENCLAW_STT_API_KEY=${OPENCLAW_STT_API_KEY:-}
-      - OPENCLAW_STT_MODEL=${OPENCLAW_STT_MODEL:-}
-      - OPENCLAW_STT_BASE_URL=${OPENCLAW_STT_BASE_URL:-}
-      - OPENCLAW_STT_LANGUAGE=${OPENCLAW_STT_LANGUAGE:-zh}
-      # TTS Configuration
-      - OPENCLAW_TTS_PROVIDER=${OPENCLAW_TTS_PROVIDER:-bailian}
-      - OPENCLAW_TTS_API_KEY=${OPENCLAW_TTS_API_KEY:-}
-      - OPENCLAW_TTS_MODEL=${OPENCLAW_TTS_MODEL:-}
-      - OPENCLAW_TTS_BASE_URL=${OPENCLAW_TTS_BASE_URL:-}
-      - OPENCLAW_TTS_VOICE=${OPENCLAW_TTS_VOICE:-Cherry}
-      - OPENCLAW_TTS_LANGUAGE=${OPENCLAW_TTS_LANGUAGE:-Chinese}
-      - OPENCLAW_TTS_INSTRUCTIONS=${OPENCLAW_TTS_INSTRUCTIONS:-}
-      # Streaming Configuration
-      - OPENCLAW_TTS_STREAMING=${OPENCLAW_TTS_STREAMING:-true}
-      - OPENCLAW_SUBTITLE_STREAMING=${OPENCLAW_SUBTITLE_STREAMING:-true}
-      - OPENCLAW_TTS_TIME_BUFFER_SECONDS=${OPENCLAW_TTS_TIME_BUFFER_SECONDS:-0.5}
-      - OPENCLAW_TTS_DATA_BUFFER_SIZE=${OPENCLAW_TTS_DATA_BUFFER_SIZE:-8192}
-      - OPENCLAW_TTS_SAMPLE_RATE=${OPENCLAW_TTS_SAMPLE_RATE:-24000}
-      # LLM Backend Configuration
-      - OPENCLAW_BACKEND_TIMEOUT_S=${OPENCLAW_BACKEND_TIMEOUT_S:-30}
-      - OPENCLAW_BACKEND_HTTP2=${OPENCLAW_BACKEND_HTTP2:-true}
-      # Performance Logging
-      - OPENCLAW_PERF_LOGGING=${OPENCLAW_PERF_LOGGING:-false}
-      # Server Configuration
-      - OPENCLAW_PORT=${OPENCLAW_PORT:-8765}
-      - OPENCLAW_REQUIRE_AUTH=${OPENCLAW_REQUIRE_AUTH:-false}
-      - OPENCLAW_MASTER_KEY=${OPENCLAW_MASTER_KEY:-}
+      - OPENCLAW_GATEWAY_PORT=${OPENCLAW_GATEWAY_PORT:-18789}
+      - OPENCLAW_VOICE_PORT=${OPENCLAW_VOICE_PORT:-8765}
     ports:
-      - "${OPENCLAW_PORT:-8765}:8765"
+      - "${OPENCLAW_VOICE_PORT:-8765}:8765"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8765/"]
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8765/\")'"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-
-networks:
-  openclaw-voice-network:
-    external: true
-
-volumes:
-  openclaw-voice_openclaw-gateway-data:
-    external: true

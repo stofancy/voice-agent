@@ -249,11 +249,21 @@ check_env() {
 # ==================== Docker 模式 ====================
 docker_up() {
     check_docker
-    check_env
-    
-    print_info "启动所有 Docker 服务..."
+
+    if [ ! -f "$SCRIPT_DIR/.env.docker" ]; then
+        print_error ".env.docker 不存在，请创建 Docker 模式配置文件"
+        exit 1
+    fi
+
+    print_info "启动所有 Docker 服务 (使用 .env.docker)..."
+
+    # 加载 .env.docker 并导出环境变量供 docker compose 使用
+    set -a
+    source "$SCRIPT_DIR/.env.docker"
+    set +a
+
     $COMPOSE_CMD up -d --build
-    
+
     sleep 3
     print_success "服务已启动"
     docker_status
@@ -378,17 +388,17 @@ local_start() {
     
     # 加载环境变量
     set -a
-    source .env
+    source .env.local
     set +a
-    
+
     print_info "启动 Voice Agent (本地模式)..."
     echo ""
     print_info "配置:"
-    echo "  - Voice Port: ${OPENCLAW_PORT:-8766} (local)"
-    echo "  - Gateway: http://localhost:18789 (docker)"
-    echo "  - LLM Provider: ${OPENCLAW_LLM_PROVIDER:-openclaw_gateway}"
-    echo "  - LLM Model: ${OPENCLAW_LLM_MODEL:-main}"
-    echo "  - Gateway Token: ${OPENCLAW_LLM_API_KEY:0:16}..."
+    echo "  - Voice Port: ${OPENCLAW_PORT:-8765} (local)"
+    echo "  - Gateway: ${OPENCLAW_LLM_BASE_URL}"
+    echo "  - LLM Provider: ${OPENCLAW_LLM_PROVIDER}"
+    echo "  - LLM Model: ${OPENCLAW_LLM_MODEL}"
+    echo "  - Gateway Token: ${OPENCLAW_LLM_API_KEY:0:4}... (${#OPENCLAW_LLM_API_KEY} chars)"
     echo ""
     
     # 检查虚拟环境
