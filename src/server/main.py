@@ -40,6 +40,11 @@ TTS_TIME_BUFFER_SECONDS = float(os.getenv("OPENCLAW_TTS_TIME_BUFFER_SECONDS", "0
 TTS_SAMPLE_RATE = int(os.getenv("OPENCLAW_TTS_SAMPLE_RATE", "24000"))
 
 
+# Streaming configuration from environment
+TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
+SUBTITLE_STREAMING = os.getenv("OPENCLAW_SUBTITLE_STREAMING", "true").lower() == "true"
+
+
 class Settings(BaseSettings):
     """Server configuration."""
 
@@ -517,6 +522,67 @@ if client_dir.exists():
 if __name__ == "__main__":
     import uvicorn
 
+    uvicorn.run(
+        "src.server.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=True,
+    )
+                            })
+                
+                audio_buffer = []
+                await websocket.send_json({"type": "listening_stopped"})
+                logger.debug("Stopped listening")
+                
+            elif msg["type"] == "audio" and is_listening:
+                # Decode base64 audio
+                audio_bytes = base64.b64decode(msg["data"])
+                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
+                audio_buffer.append(audio_np)
+                logger.debug(f"📥 Audio chunk: {len(audio_np)} samples, buffer now: {len(audio_buffer)} chunks, total: {sum(len(c) for c in audio_buffer)} samples")
+                
+                # VAD check - notify client if speech detected
+                if vad and len(audio_np) > 0:
+                    has_speech = vad.is_speech(audio_np)
+                    await websocket.send_json({
+                        "type": "vad_status",
+                        "speech_detected": has_speech,
+                    })
+                
+            elif msg["type"] == "ping":
+                await websocket.send_json({"type": "pong"})
+                
+    except WebSocketDisconnect:
+        logger.info("Client disconnected")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+        await websocket.close()
+
+
+# Serve static files for client
+client_dir = Path(__file__).parent.parent / "client"
+if client_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(
+        "src.server.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=True,
+    )
+ue,
+    )
+es for client
+client_dir = Path(__file__).parent.parent / "client"
+if client_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
     uvicorn.run(
         "src.server.main:app",
         host=settings.host,
