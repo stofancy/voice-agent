@@ -133,10 +133,10 @@ class BailianTTS:
                                             # 记录第一个音频块的时间
                                             if first_chunk_time is None:
                                                 first_chunk_time = line_received_at
-                                                logger.info(f"🔊 TTS 首块延迟：{(line_received_at - start_time)*1000:.1f}ms")
-                                            
+                                                logger.info(f"🔊 TTS 首块延迟：{(line_received_at - first_chunk_time)*1000:.1f}ms")
+
                                             # 记录每个音频块的详细信息
-                                            logger.debug(f"🔊 TTS 音频块 #{audio_chunk_count}: {len(decoded_audio)} bytes, 延迟 {(line_received_at - start_time)*1000:.1f}ms")
+                                            logger.debug(f"🔊 TTS 音频块 #{audio_chunk_count}: {len(decoded_audio)} bytes, 延迟 {(line_received_at - first_chunk_time)*1000:.1f}ms")
                                             
                                             yield decoded_audio
                                     else:
@@ -145,7 +145,7 @@ class BailianTTS:
                                     logger.error(f"🔊 TTS JSON 解析失败：{e}")
                                     continue
                     
-                    total_time = asyncio.get_event_loop().time() - start_time
+                    total_time = asyncio.get_event_loop().time() - first_chunk_time if first_chunk_time else 0
                     logger.info(f"🔊 TTS 流式完成：{audio_chunk_count} 块，{total_bytes} bytes, 总耗时 {total_time*1000:.1f}ms, 平均 {(total_time/audio_chunk_count)*1000:.1f}ms/块")
                 else:
                     # 非流式：获取完整音频 URL
@@ -165,6 +165,105 @@ class BailianTTS:
                         
         except Exception as e:
             logger.error(f"❌ TTS 合成失败：{e}")
+
+    async def synthesize_incremental(
+        self,
+        text_chunks: AsyncGenerator[str, None],
+    ) -> AsyncGenerator[bytes, None]:
+        """
+        增量合成：接受文本流，边接收边合成音频流。
+
+        内部启动两个并行任务：
+        1. 消费 text_chunks，累积完整文本
+        2. 当累积足够文本时，调用 TTS API 并将返回的音频流立即 yield
+
+        Args:
+            text_chunks: 异步文本块生成器（来自 LLM streaming）
+
+        Yields:
+            音频数据块
+        """
+        if not self.api_key:
+            logger.debug("Mock TTS: 无音频输出")
+            return
+
+        text_queue: asyncio.Queue[str] = asyncio.Queue()
+        audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        text_complete = False
+        synthesis_started = False
+        min_text_length = 5  # 至少积累几个字符才开始合成
+
+        async def text_consumer():
+            """消费文本块，累积到队列"""
+            nonlocal text_complete, synthesis_started
+            accumulated = ""
+
+            async for chunk in text_chunks:
+                accumulated += chunk
+                await text_queue.put(chunk)
+
+                # 当累积了足够文本且尚未开始合成时，启动合成
+                if len(accumulated) >= min_text_length and not synthesis_started:
+                    synthesis_started = True
+                    logger.debug(f"📝 文本已积累 {len(accumulated)} 字符，启动增量合成")
+
+            text_complete = True
+            await text_queue.put("__END__")  # 发送结束信号
+
+        async def tts_producer():
+            """从队列消费文本，调用 TTS API，产出音频"""
+            nonlocal synthesis_started
+            buffer = ""
+
+            while not text_complete or buffer:
+                try:
+                    chunk = await asyncio.wait_for(text_queue.get(), timeout=0.1)
+                    if chunk == "__END__":
+                        # 将 __END__ 放回队列，让 text_chunk_generator 也能看到
+                        await text_queue.put("__END__")
+                        break
+                    buffer += chunk
+                except asyncio.TimeoutError:
+                    # 超时但已开始合成，发送剩余文本
+                    if synthesis_started and buffer:
+                        pass  # 继续循环，看是否还有更多文本
+                    continue
+
+                # 当有足够文本时调用 TTS
+                if len(buffer) >= min_text_length:
+                    logger.debug(f"🔊 调用 TTS（文本长度：{len(buffer)}）")
+                    try:
+                        async for audio_chunk in self.synthesize(buffer, stream=True):
+                            await audio_queue.put(audio_chunk)
+                        buffer = ""  # 清空缓冲区
+                    except Exception as e:
+                        logger.error(f"❌ 增量 TTS 失败：{e}")
+                        break
+
+            # 发送剩余文本的音频
+            if buffer:
+                logger.debug(f"🔊 发送最后文本（{len(buffer)}字符）的音频")
+                try:
+                    async for audio_chunk in self.synthesize(buffer, stream=True):
+                        await audio_queue.put(audio_chunk)
+                except Exception as e:
+                    logger.error(f"❌ 最后文本 TTS 失败：{e}")
+
+            await audio_queue.put(b"__END__")  # 发送结束信号
+
+        # 启动两个并行任务
+        consumer_task = asyncio.create_task(text_consumer())
+        producer_task = asyncio.create_task(tts_producer())
+
+        # 从 audio_queue 消费音频直到结束
+        while True:
+            audio_chunk = await audio_queue.get()
+            if audio_chunk == b"__END__":
+                break
+            yield audio_chunk
+
+        await consumer_task
+        await producer_task
     
     async def synthesize_to_file(
         self,
