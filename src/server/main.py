@@ -296,42 +296,44 @@ async def websocket_endpoint(websocket: WebSocket):
                     if transcript.strip() and success:
                         # Get AI response (streaming)
                         logger.debug("Getting AI response (streaming)...")
-                        
+
                         try:
-                            # Stream AI response sentence-by-sentence
-                            full_response = ""
-                            async for chunk in backend.chat_stream(transcript):
-                                full_response += chunk
-                                # Send subtitle chunk in real-time
-                                await websocket.send_json({
-                                    "type": "subtitle_chunk",
-                                    "text": chunk,
-                                })
-                                logger.debug(f"📝 Sent subtitle chunk: {chunk[:30]}...")
-                            
-                            # Synthesize with Bailian TTS (streaming with time + data buffer)
-                            logger.debug(f"🔊 Synthesizing response (streaming): {full_response[:50]}...")
-                            
-                            # Stream TTS audio chunks with buffering
+                            # 使用增量 TTS：边接收 LLM 输出边合成音频
+                            # 同时发送 subtitle_chunk 和 audio_chunk
                             tts_start_time = asyncio.get_event_loop().time()
                             audio_chunks_sent = 0
                             buffer = bytearray()
                             first_chunk_received = False
                             buffer_start_time = None
-                            
-                            async for audio_chunk in tts.synthesize(full_response, stream=True):
+                            full_response = ""
+
+                            # 创建异步文本生成器，同时发送字幕
+                            async def text_chunks_with_subtitles():
+                                """生成文本块，同时发送字幕到客户端"""
+                                nonlocal full_response
+                                async for chunk in backend.chat_stream(transcript):
+                                    full_response += chunk
+                                    await websocket.send_json({
+                                        "type": "subtitle_chunk",
+                                        "text": chunk,
+                                    })
+                                    logger.debug(f"📝 Sent subtitle chunk: {chunk[:30]}...")
+                                    yield chunk
+
+                            # 使用增量 TTS（内部处理并行逻辑）
+                            async for audio_chunk in tts.synthesize_incremental(text_chunks_with_subtitles()):
                                 buffer.extend(audio_chunk)
-                                
+
                                 # 记录第一个音频块的到达时间
                                 if not first_chunk_received:
                                     first_chunk_received = True
                                     buffer_start_time = asyncio.get_event_loop().time()
-                                    logger.info(f"🔊 TTS 收到首块，开始 {TTS_TIME_BUFFER_SECONDS}秒缓冲...")
-                                
+                                    logger.info(f"🔊 TTS 收到首块，开始缓冲...")
+
                                 # 当缓冲区足够大且时间缓冲足够时发送
                                 current_time = asyncio.get_event_loop().time()
                                 time_buffer_elapsed = (current_time - buffer_start_time) if buffer_start_time else 0
-                                
+
                                 if len(buffer) >= TTS_DATA_BUFFER_SIZE and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS:
                                     audio_b64 = base64.b64encode(bytes(buffer)).decode()
                                     await websocket.send_json({
@@ -341,10 +343,10 @@ async def websocket_endpoint(websocket: WebSocket):
                                     })
                                     audio_chunks_sent += 1
                                     chunk_time = asyncio.get_event_loop().time()
-                                    logger.debug(f"🔊 发送缓冲音频块 #{audio_chunks_sent}: {len(buffer)} bytes, 总延迟 {(chunk_time - tts_start_time)*1000:.1f}ms (时间缓冲：{time_buffer_elapsed_ms:.1f}ms)")
+                                    logger.debug(f"🔊 发送缓冲音频块 #{audio_chunks_sent}: {len(buffer)} bytes, 总延迟 {(chunk_time - tts_start_time)*1000:.1f}ms (时间缓冲：{time_buffer_elapsed*1000:.1f}ms)")
                                     buffer = bytearray()  # 清空缓冲区
                                     buffer_start_time = asyncio.get_event_loop().time()  # 重置时间缓冲
-                            
+
                             # 发送剩余数据
                             if buffer:
                                 audio_b64 = base64.b64encode(bytes(buffer)).decode()
@@ -355,16 +357,16 @@ async def websocket_endpoint(websocket: WebSocket):
                                 })
                                 audio_chunks_sent += 1
                                 logger.debug(f"🔊 发送最后音频块 #{audio_chunks_sent}: {len(buffer)} bytes")
-                            
+
                             tts_total_time = asyncio.get_event_loop().time() - tts_start_time
                             logger.info(f"🔊 TTS 完成：{audio_chunks_sent} 块，总耗时 {tts_total_time*1000:.1f}ms")
-                            
+
                             await websocket.send_json({
                                 "type": "response_complete",
                                 "text": full_response,
                             })
                             logger.info(f"✅ Response complete: {full_response[:100]}...")
-                            
+
                         except Exception as e:
                             logger.error(f"AI/TTS error: {type(e).__name__}: {e}")
                             # Send fallback response
@@ -408,67 +410,6 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 # Serve static files for client
-client_dir = Path(__file__).parent.parent / "client"
-if client_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-                            })
-                
-                audio_buffer = []
-                await websocket.send_json({"type": "listening_stopped"})
-                logger.debug("Stopped listening")
-                
-            elif msg["type"] == "audio" and is_listening:
-                # Decode base64 audio
-                audio_bytes = base64.b64decode(msg["data"])
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                audio_buffer.append(audio_np)
-                logger.debug(f"📥 Audio chunk: {len(audio_np)} samples, buffer now: {len(audio_buffer)} chunks, total: {sum(len(c) for c in audio_buffer)} samples")
-                
-                # VAD check - notify client if speech detected
-                if vad and len(audio_np) > 0:
-                    has_speech = vad.is_speech(audio_np)
-                    await websocket.send_json({
-                        "type": "vad_status",
-                        "speech_detected": has_speech,
-                    })
-                
-            elif msg["type"] == "ping":
-                await websocket.send_json({"type": "pong"})
-                
-    except WebSocketDisconnect:
-        logger.info("Client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close()
-
-
-# Serve static files for client
-client_dir = Path(__file__).parent.parent / "client"
-if client_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-ue,
-    )
-es for client
 client_dir = Path(__file__).parent.parent / "client"
 if client_dir.exists():
     app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
