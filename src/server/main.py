@@ -344,7 +344,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         if not first_chunk_received:
                             first_chunk_received = True
                             t_tts_first = time.perf_counter()
-                            if perf_logger.is_enabled():
+                            if perf_logger.is_enabled() and t_llm_end is not None:
                                 perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
                             buffer_start_time = asyncio.get_event_loop().time()
                             logger.info(f"🔊 TTS first chunk received, buffering {TTS_TIME_BUFFER_SECONDS}s...")
