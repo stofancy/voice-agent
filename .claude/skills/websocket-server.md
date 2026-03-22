@@ -1,33 +1,50 @@
 # WebSocket Server 技能
 
 ## 概述
+
 本技能指导如何理解和使用 voice-agent 项目的 WebSocket 服务器。
 
 ## 项目结构
-- 主服务器: `src/server/main.py` - FastAPI + WebSocket
+
+```
+src/server/
+├── main.py                    # WebSocket 入口，消息路由
+├── voice_turn.py             # VoiceTurn 类：完整对话编排
+├── streaming_synthesis.py     # StreamingSynthesis 类：LLM+TTS 并行流
+├── turn_context.py            # TurnContext：每次对话状态+取消
+├── message_router.py         # 消息处理函数
+├── connection.py            # WebSocketConnection, ConnectionStateMachine
+├── audio.py                 # AudioBuffer
+├── messages.py              # parse_message(), WSMessage 类型
+└── tts/
+    └── bailian_tts_realtime.py  # RealtimeTTSStream
+```
 
 ## 架构概览
 
-### 消息流程
+### WebSocket 消息循环
+
 ```
-客户端                    服务器
-  |                        |
-  |--- start_listening --->|
-  |--- audio ( chunks )-->| (VAD 检测)
-  |                        |
-  |--- stop_listening ---->|
-  |                        |--- transcribe (STT)
-  |<-- transcript --------|
-  |                        |--- chat_stream (LLM)
-  |<-- subtitle_chunk -----|
-  |                        |--- TTS stream
-  |<-- tts_start ---------|
-  |<-- audio_chunk (多次)-|
-  |<-- tts_end -----------|
-  |                        |
+websocket_endpoint
+├── AudioBuffer                 # 录音缓冲
+├── ConnectionStateMachine      # 连接状态
+├── TurnContext               # 对话状态+取消信号
+├── VoiceTurn.execute()       # 完整对话流程
+│   ├── STT transcription
+│   └── StreamingSynthesis.run()
+│       ├── llm_feed_loop     # LLM token → TTS feed
+│       └── tts_consume_loop  # TTS audio → WebSocket
+└── Message handlers (message_router.py)
+    ├── handle_start_listening
+    ├── handle_stop_listening
+    ├── handle_audio
+    ├── handle_interrupt
+    ├── handle_ping
+    └── handle_perf_report
 ```
 
 ### 状态机
+
 ```
 IDLE -> LISTENING -> PROCESSING -> SPEAKING -> IDLE
                             ^              |
@@ -36,109 +53,120 @@ IDLE -> LISTENING -> PROCESSING -> SPEAKING -> IDLE
 
 ## 核心实现
 
-### 1. WebSocket 端点
+### 1. WebSocket 端点 (main.py)
+
 ```python
-from fastapi import WebSocket, WebSocketDisconnect
+from .audio import AudioBuffer
+from .connection import ConnectionStateMachine, ConnectionState
+from .turn_context import TurnContext
+from .voice_turn import VoiceTurn
+from .messages import parse_message
+from .message_router import (
+    handle_start_listening,
+    handle_stop_listening,
+    handle_audio,
+    handle_interrupt,
+    handle_ping,
+    handle_perf_report,
+)
 
 @app.websocket("/ws")
-@app.websocket("/voice/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
-    # 处理连接
+    # 初始化
+    connection_state = ConnectionStateMachine()
+    audio_buffer = AudioBuffer()
+    turn_context = TurnContext()
+
     try:
         while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            await handle_message(websocket, msg)
+            raw = await websocket.receive_text()
+            message = parse_message(raw)
+            msg_type = message.type.value
+
+            if msg_type == "start_listening":
+                await handle_start_listening(
+                    websocket=websocket,
+                    connection_state=connection_state,
+                    audio_buffer=audio_buffer,
+                    cancel_callback=cancel_response,
+                )
+            elif msg_type == "stop_listening":
+                new_task = await handle_stop_listening(...)
+                if new_task:
+                    response_task = new_task
+            # ... 其他消息类型
     except WebSocketDisconnect:
-        # 客户端断开
-        pass
+        await cancel_response(send_interrupt_event=False)
 ```
 
-### 2. 消息类型处理
+### 2. VoiceTurn (voice_turn.py)
+
 ```python
-async def handle_message(websocket: WebSocket, msg: dict):
-    msg_type = msg.get("type")
+class VoiceTurn:
+    def __init__(self, stt, llm, tts, websocket, config, turn_context):
+        self._stt = stt
+        self._llm = llm
+        self._tts = tts
+        self._ws = websocket
+        self._config = config
+        self._turn_context = turn_context
 
-    if msg_type == "start_listening":
-        # 开始录音
-        await websocket.send_json({"type": "listening_started"})
+    async def execute(self, audio_data: np.ndarray) -> str:
+        # STT
+        transcript, success = await self._stt.transcribe(audio_data)
+        await self._ws.send_transcript(transcript)
 
-    elif msg_type == "stop_listening":
-        # 停止录音，处理音频
-        audio_data = np.concatenate(audio_buffer)
-        response_task = asyncio.create_task(run_turn(audio_data))
+        if not transcript.strip() or not success:
+            await self._ws.send_listening_stopped()
+            return ""
 
-    elif msg_type == "audio":
-        # 接收音频数据 (base64)
-        audio_bytes = base64.b64decode(msg["data"])
-        audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-        audio_buffer.append(audio_np)
+        # LLM + TTS
+        self._state.transition_to(ConnectionState.SPEAKING)
+        await self._ws.send_tts_start()
 
-        # VAD 检测
-        if vad:
-            has_speech = vad.is_speech(audio_np)
-            await websocket.send_json({
-                "type": "vad_status",
-                "speech_detected": has_speech,
-            })
+        synthesis = StreamingSynthesis(
+            llm=self._llm,
+            tts=self._tts,
+            websocket=self._ws,
+            config=self._config,
+            turn_context=self._turn_context,
+        )
+        result = await synthesis.run(transcript)
 
-    elif msg_type == "interrupt":
-        # 打断当前响应
-        await cancel_response()
-        await websocket.send_json({"type": "interrupt_ack"})
+        await self._ws.send_tts_end(interrupted=False)
+        await self._ws.send_response_complete(result.full_response)
+        await self._ws.send_listening_stopped()
 
-    elif msg_type == "ping":
-        await websocket.send_json({"type": "pong"})
+        return result.full_response
 ```
 
-### 3. 处理流程 (run_turn)
+### 3. StreamingSynthesis (streaming_synthesis.py)
+
 ```python
-async def run_turn(audio_data: np.ndarray):
-    # 1. STT - 语音转文字
-    transcript, success = await stt.transcribe(audio_data)
-    await websocket.send_json({
-        "type": "transcript",
-        "text": transcript,
-        "final": True,
-    })
+class StreamingSynthesis:
+    async def run(self, transcript: str) -> SynthesisResult:
+        tts_stream = self._tts.create_stream()
 
-    if not transcript.strip():
-        await send_listening_stopped_once()
-        return
+        async def llm_feed_loop():
+            async for chunk in self._llm.chat_stream(transcript):
+                full_response += chunk
+                if self._config.subtitle_streaming:
+                    await self._ws.send_subtitle_chunk(chunk)
+                tts_stream.feed(chunk)
+            tts_stream.finish()
 
-    # 2. LLM - 对话生成
-    full_response = ""
-    tts_stream = tts.create_stream()
+        async def tts_consume_loop():
+            tts_stream._ensure_connected()
+            async for audio_chunk in tts_stream:
+                if self._turn_context and self._turn_context.is_cancelled():
+                    break
+                buffer.extend(audio_chunk)
+                # 缓冲后发送...
 
-    async for chunk in backend.chat_stream(transcript):
-        full_response += chunk
-        # 实时字幕
-        if SUBTITLE_STREAMING:
-            await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
-        # 喂给 TTS
-        tts_stream.feed(chunk)
-
-    # 3. TTS - 语音合成
-    tts_stream.finish()
-    await websocket.send_json({"type": "tts_start"})
-
-    # 发送音频块
-    async for audio_chunk in tts_stream:
-        buffer.extend(audio_chunk)
-        # 缓冲后发送
-        if len(buffer) >= TTS_DATA_BUFFER_SIZE:
-            audio_b64 = base64.b64encode(bytes(buffer)).decode()
-            await websocket.send_json({
-                "type": "audio_chunk",
-                "data": audio_b64,
-                "sample_rate": TTS_SAMPLE_RATE,
-            })
-            buffer = bytearray()
-
-    await websocket.send_json({"type": "tts_end", "interrupted": False})
-    await send_listening_stopped_once()
+        await asyncio.gather(llm_feed_loop(), tts_consume_loop())
+        return SynthesisResult(full_response=full_response, metrics=...)
 ```
 
 ## 消息协议
@@ -160,86 +188,94 @@ async def run_turn(audio_data: np.ndarray):
 | `vad_status` | `{"speech_detected": bool}` | VAD 状态 |
 | `transcript` | `{"text": str, "final": bool}` | 识别结果 |
 | `subtitle_chunk` | `{"text": str}` | 实时字幕 |
-| `response_chunk` | `{"text": str}` | 完整回复 (非流式) |
 | `tts_start` | `{}` | 开始播放 |
 | `audio_chunk` | `{"data": base64, "sample_rate": int}` | 音频数据 |
 | `tts_end` | `{"interrupted": bool}` | 播放结束 |
+| `response_complete` | `{"text": str}` | 完整回复 |
 | `interrupt_ack` | `{}` | 打断确认 |
 | `pong` | `{}` | 心跳响应 |
 
-## 认证和速率限制
+## 消息处理函数 (message_router.py)
 
-### WebSocket 认证
 ```python
-async def _validate_ws_auth(websocket: WebSocket):
-    api_key_str = websocket.query_params.get("api_key") or \
-                  websocket.headers.get("x-api-key")
+async def handle_start_listening(websocket, connection_state, audio_buffer, cancel_callback):
+    await cancel_callback(send_interrupt_event=False)
+    audio_buffer.clear()
+    connection_state.transition_to(ConnectionState.LISTENING)
+    await websocket.send_json({"type": "listening_started"})
 
-    if settings.require_auth:
-        if not api_key_str:
-            await websocket.close(code=4001, reason="API key required")
-            return None
+async def handle_stop_listening(websocket, connection_state, audio_buffer, turn_context, ...):
+    if not connection_state.is_listening():
+        await websocket.send_json({"type": "listening_stopped"})
+        return None
+    connection_state.transition_to(ConnectionState.PROCESSING)
+    if audio_buffer.is_empty():
+        await websocket.send_json({"type": "listening_stopped"})
+        return None
+    audio_data = audio_buffer.concatenate()
+    audio_buffer.clear()
+    turn_context.reset()
+    # 创建 VoiceTurn 并返回 task
 
-        api_key = token_manager.validate_key(api_key_str)
-        if not api_key:
-            await websocket.close(code=4002, reason="Invalid API key")
-            return None
+async def handle_audio(message, websocket, connection_state, audio_buffer, vad):
+    if not connection_state.is_listening():
+        return
+    audio_np = np.frombuffer(message.audio_data, dtype=np.float32)
+    audio_buffer.append(audio_np)
+    if vad:
+        has_speech = vad.is_speech(audio_np)
+        await websocket.send_json({"type": "vad_status", "speech_detected": has_speech})
 
-        if not token_manager.check_rate_limit(api_key):
-            await websocket.close(code=4003, reason="Rate limit exceeded")
-            return None
-
-    return api_key
+async def handle_interrupt(websocket, cancel_callback):
+    await websocket.send_json({"type": "interrupt_ack"})
+    await cancel_callback(send_interrupt_event=True)
 ```
 
-### 错误码
-- `4001`: API key required
-- `4002`: Invalid API key
-- `4003`: Rate limit exceeded
+## 取消机制
 
-## 配置参数
+取消通过 `TurnContext` 和 `response_task` 两者实现：
 
 ```python
-# 环境变量
-OPENCLAW_HOST: str = "0.0.0.0"
-OPENCLAW_PORT: int = 8765
-OPENCLAW_REQUIRE_AUTH: bool = False
+# TurnContext - 协作取消
+class TurnContext:
+    cancelled: asyncio.Event
 
-# TTS 流式配置
-OPENCLAW_TTS_STREAMING: bool = True
-OPENCLAW_SUBTITLE_STREAMING: bool = True
-OPENCLAW_TTS_DATA_BUFFER_SIZE: int = 8192
-OPENCLAW_TTS_TIME_BUFFER_SECONDS: float = 0.1
-OPENCLAW_TTS_SAMPLE_RATE: int = 24000
-```
+    def cancel(self):
+        self.cancelled.set()
 
-## 性能优化
+    def is_cancelled(self) -> bool:
+        return self.cancelled.is_set()
 
-### 音频缓冲策略
-```python
-# 累积一定时间和数据量后发送
-if (
-    len(buffer) >= TTS_DATA_BUFFER_SIZE
-    and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
-):
-    # 发送缓冲的音频
-    buffer = bytearray()
-    buffer_start_time = current_time
-```
-
-### 并发处理
-```python
-# 使用 asyncio.Task 处理响应
-response_task = asyncio.create_task(run_turn(audio_data))
-
-# 打断时取消任务
-async def cancel_response():
-    global response_task
+# cancel_response
+async def cancel_response(send_interrupt_event: bool):
+    turn_context.cancel()  # 协作取消
     if response_task and not response_task.done():
         response_task.cancel()
         try:
             await response_task
         except asyncio.CancelledError:
             pass
-    response_task = None
+    if send_interrupt_event:
+        await websocket.send_json({"type": "interrupt_complete"})
+```
+
+## 配置参数
+
+```python
+# TTS 流式配置
+OPENCLAW_TTS_STREAMING: bool = True
+OPENCLAW_SUBTITLE_STREAMING: bool = True
+OPENCLAW_TTS_DATA_BUFFER_SIZE: int = 8192      # bytes
+OPENCLAW_TTS_TIME_BUFFER_SECONDS: float = 0.5   # seconds
+OPENCLAW_TTS_SAMPLE_RATE: int = 24000
+OPENCLAW_TTS_PROVIDER: str = "bailian_realtime"
+```
+
+## 测试
+
+```bash
+# 运行 WebSocket 测试
+.venv/bin/python -m pytest tests/unit/test_main_websocket.py -v
+
+# 31 个测试全部通过
 ```
