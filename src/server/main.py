@@ -31,6 +31,9 @@ from .stt import create_stt
 from .llm import create_llm
 from .text_utils import clean_for_speech
 from .vad import VoiceActivityDetector
+from .audio import AudioBuffer
+from .streaming_synthesis import StreamingSynthesis, SynthesisConfig
+from .connection import WebSocketConnection, ConnectionStateMachine, ConnectionState
 
 
 TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
@@ -242,8 +245,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
 
-    connection_state = "IDLE"
-    audio_buffer: list[np.ndarray] = []
+    connection_state = ConnectionStateMachine()
+    audio_buffer = AudioBuffer()
     response_task: Optional[asyncio.Task] = None
 
     last_perf_data: dict = {}
@@ -253,7 +256,7 @@ async def websocket_endpoint(websocket: WebSocket):
     async def send_listening_stopped_once():
         nonlocal connection_state
         await websocket.send_json({"type": "listening_stopped"})
-        connection_state = "IDLE"
+        connection_state.transition_to(ConnectionState.IDLE)
 
     async def run_turn(audio_data: np.ndarray):
         nonlocal connection_state, last_transcript, last_response, last_perf_data
@@ -271,7 +274,7 @@ async def websocket_endpoint(websocket: WebSocket):
         tts_start_time: float = 0.0
 
         try:
-            connection_state = "PROCESSING"
+            connection_state.transition_to(ConnectionState.PROCESSING)
 
             # ── STT stage ──────────────────────────────────────────
             if perf_logger.is_enabled():
@@ -299,103 +302,42 @@ async def websocket_endpoint(websocket: WebSocket):
                     last_perf_data = perf_data
                 return
 
-            # ── LLM + TTS stage (parallel execution) ─────────
-            full_response = ""
-            tts_stream = tts.create_stream()
+            # ── LLM + TTS stage (using StreamingSynthesis) ─────────
+            ws_connection = WebSocketConnection(websocket)
+            synthesis_config = SynthesisConfig(
+                data_buffer_size=TTS_DATA_BUFFER_SIZE,
+                time_buffer_seconds=TTS_TIME_BUFFER_SECONDS,
+                sample_rate=TTS_SAMPLE_RATE,
+                subtitle_streaming=SUBTITLE_STREAMING,
+            )
+            synthesis = StreamingSynthesis(
+                llm=backend,
+                tts=tts,
+                websocket=ws_connection,
+                config=synthesis_config,
+            )
             tts_started = True
-            connection_state = "SPEAKING"
+            connection_state.transition_to(ConnectionState.SPEAKING)
             await websocket.send_json({"type": "tts_start"})
 
-            async def llm_feed_loop():
-                """LLM 产生 token → feed 给 TTS → 发送字幕"""
-                nonlocal full_response, t_llm_first, t_llm_end
-                try:
-                    async for chunk in backend.chat_stream(transcript):
-                        full_response += chunk
-                        if perf_logger.is_enabled() and t_llm_first is None:
-                            t_llm_first = time.perf_counter()
-                            perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
-                        if SUBTITLE_STREAMING:
-                            await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
-                        tts_stream.feed(chunk)
-                finally:
-                    tts_stream.finish()  # 保证 finish() 被调用
-                    t_llm_end = time.perf_counter()
-                if perf_logger.is_enabled() and t_llm_first is not None:
-                    perf_data["llm_gen_ms"] = (t_llm_end - t_llm_first) * 1000
+            try:
+                result = await synthesis.run(transcript)
+                full_response = result.full_response
 
-            async def tts_consume_loop():
-                """TTS 音频边产生边发送"""
-                nonlocal audio_chunks_sent, t_tts_first, t_llm_end, tts_start_time
-                logger.info("🔊 TTS consume loop started")
-                # 确保 TTS stream 已初始化（feed 会触发懒连接）
-                tts_stream._ensure_connected()
-                logger.info("🔊 TTS stream ensured connected")
-                buffer = bytearray()
-                first_chunk_received = False
-                buffer_start_time: Optional[float] = None
-                tts_start_time = asyncio.get_event_loop().time()
-                try:
-                    async for audio_chunk in tts_stream:
-                        buffer.extend(audio_chunk)
+                if perf_logger.is_enabled():
+                    perf_data["llm_ttft_ms"] = result.metrics.llm_ttft_ms
+                    perf_data["llm_gen_ms"] = result.metrics.llm_gen_ms
+                    perf_data["tts_ttfa_ms"] = result.metrics.tts_ttfa_ms
+                    perf_data["tts_total_ms"] = result.metrics.tts_total_ms
+                    last_perf_data = perf_data
 
-                        if not first_chunk_received:
-                            first_chunk_received = True
-                            t_tts_first = time.perf_counter()
-                            if perf_logger.is_enabled() and t_llm_end is not None:
-                                perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
-                            buffer_start_time = asyncio.get_event_loop().time()
-                            logger.info(f"🔊 TTS first chunk received, buffering {TTS_TIME_BUFFER_SECONDS}s...")
+                await websocket.send_json({"type": "tts_end", "interrupted": False})
+                await websocket.send_json({"type": "response_complete", "text": full_response})
+                await send_listening_stopped_once()
 
-                        current_time = asyncio.get_event_loop().time()
-                        time_buffer_elapsed = (
-                            (current_time - buffer_start_time) if buffer_start_time is not None else 0
-                        )
-
-                        if (
-                            len(buffer) >= TTS_DATA_BUFFER_SIZE
-                            and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
-                        ):
-                            audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                            await websocket.send_json(
-                                {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
-                            )
-                            audio_chunks_sent += 1
-                            logger.debug(
-                                "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms",
-                                audio_chunks_sent,
-                                len(buffer),
-                                (current_time - tts_start_time) * 1000,
-                            )
-                            buffer = bytearray()
-                            buffer_start_time = asyncio.get_event_loop().time()
-
-                    if buffer:
-                        audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                        await websocket.send_json(
-                            {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
-                        )
-                        audio_chunks_sent += 1
-                    logger.info(f"🔊 TTS consume loop finished, sent {audio_chunks_sent} chunks")
-                except asyncio.CancelledError:
-                    logger.warning("🔊 TTS consume loop cancelled")
-                    raise  # 重新抛出以符合 asyncio.gather 取消语义
-                except Exception as e:
-                    logger.error(f"🔊 TTS consume loop error: {e}")
-                    raise
-
-            # 并行执行 LLM feed 和 TTS consume
-            await asyncio.gather(llm_feed_loop(), tts_consume_loop())
-
-            tts_total_time = asyncio.get_event_loop().time() - tts_start_time
-            logger.info("🔊 TTS complete: {} chunks, total {:.1f}ms", audio_chunks_sent, tts_total_time * 1000)
-
-            if perf_logger.is_enabled():
-                last_perf_data = perf_data
-
-            await websocket.send_json({"type": "tts_end", "interrupted": False})
-            await websocket.send_json({"type": "response_complete", "text": full_response})
-            await send_listening_stopped_once()
+            except asyncio.CancelledError:
+                logger.info("🔴 Response task cancelled")
+                raise
 
         except asyncio.CancelledError:
             logger.info("🔴 Response task cancelled")
@@ -435,9 +377,9 @@ async def websocket_endpoint(websocket: WebSocket):
                 await response_task
             except asyncio.CancelledError:
                 pass
-            if send_interrupt_event:
-                await websocket.send_json({"type": "interrupt_complete"})
         response_task = None
+        if send_interrupt_event:
+            await websocket.send_json({"type": "interrupt_complete"})
 
     try:
         while True:
@@ -448,29 +390,29 @@ async def websocket_endpoint(websocket: WebSocket):
 
             if msg_type == "start_listening":
                 await cancel_response(send_interrupt_event=False)
-                audio_buffer = []
-                connection_state = "LISTENING"
+                audio_buffer.clear()
+                connection_state.transition_to(ConnectionState.LISTENING)
                 await websocket.send_json({"type": "listening_started"})
 
             elif msg_type == "stop_listening":
-                if connection_state != "LISTENING":
+                if not connection_state.is_listening():
                     await send_listening_stopped_once()
                     continue
 
-                connection_state = "PROCESSING"
+                connection_state.transition_to(ConnectionState.PROCESSING)
                 if not audio_buffer:
                     await send_listening_stopped_once()
                     continue
 
-                audio_data = np.concatenate(audio_buffer)
-                audio_buffer = []
+                audio_data = audio_buffer.concatenate()
+                audio_buffer.clear()
                 response_task = asyncio.create_task(run_turn(audio_data))
 
             elif msg_type == "interrupt":
                 await websocket.send_json({"type": "interrupt_ack"})
                 await cancel_response(send_interrupt_event=True)
 
-            elif msg_type == "audio" and connection_state == "LISTENING":
+            elif msg_type == "audio" and connection_state.is_listening():
                 audio_bytes = base64.b64decode(msg["data"])
                 audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
                 audio_buffer.append(audio_np)
@@ -506,6 +448,7 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("Client disconnected")
         await cancel_response(send_interrupt_event=False)
+        await websocket.close()
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         await cancel_response(send_interrupt_event=False)
