@@ -36,6 +36,7 @@ from .streaming_synthesis import StreamingSynthesis, SynthesisConfig
 from .connection import WebSocketConnection, ConnectionStateMachine, ConnectionState
 from .turn_context import TurnContext
 from .voice_turn import VoiceTurn
+from .messages import parse_message
 
 
 TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
@@ -276,9 +277,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
     try:
         while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            msg_type = msg.get("type")
+            raw = await websocket.receive_text()
+            message = parse_message(raw)
+            msg_type = message.type.value
             logger.debug(f"📨 Received: {msg_type}")
 
             if msg_type == "start_listening":
@@ -319,8 +320,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await cancel_response(send_interrupt_event=True)
 
             elif msg_type == "audio" and connection_state.is_listening():
-                audio_bytes = base64.b64decode(msg["data"])
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
+                audio_np = np.frombuffer(message.audio_data, dtype=np.float32)
                 audio_buffer.append(audio_np)
 
                 if vad and len(audio_np) > 0:
@@ -337,7 +337,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             elif msg_type == "perf_report":
                 if perf_logger.is_enabled():
-                    frontend_metrics = msg.get("metrics", {})
+                    frontend_metrics = message.metrics
                     context = {
                         "transcript": last_transcript,
                         "response_length": len(last_response),
