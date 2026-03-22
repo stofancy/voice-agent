@@ -40,11 +40,6 @@ TTS_TIME_BUFFER_SECONDS = float(os.getenv("OPENCLAW_TTS_TIME_BUFFER_SECONDS", "0
 TTS_SAMPLE_RATE = int(os.getenv("OPENCLAW_TTS_SAMPLE_RATE", "24000"))
 
 
-# Streaming configuration from environment
-TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
-SUBTITLE_STREAMING = os.getenv("OPENCLAW_SUBTITLE_STREAMING", "true").lower() == "true"
-
-
 class Settings(BaseSettings):
     """Server configuration."""
 
@@ -310,7 +305,6 @@ async def websocket_endpoint(websocket: WebSocket):
             async def llm_feed_loop():
                 """LLM 产生 token → feed 给 TTS → 发送字幕"""
                 nonlocal full_response, t_llm_first, t_llm_end
-                t_llm_first = None  # 避免 UnboundLocalError
                 try:
                     async for chunk in backend.chat_stream(transcript):
                         full_response += chunk
@@ -387,7 +381,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     raise
 
             # 并行执行 LLM feed 和 TTS consume
-            tts_start_time = asyncio.get_event_loop().time()
             audio_chunks_sent = 0
             await asyncio.gather(llm_feed_loop(), tts_consume_loop())
 
