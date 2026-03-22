@@ -309,15 +309,17 @@ async def websocket_endpoint(websocket: WebSocket):
             async def llm_feed_loop():
                 """LLM 产生 token → feed 给 TTS → 发送字幕"""
                 nonlocal full_response
-                async for chunk in backend.chat_stream(transcript):
-                    full_response += chunk
-                    if perf_logger.is_enabled() and t_llm_first is None:
-                        t_llm_first = time.perf_counter()
-                        perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
-                    if SUBTITLE_STREAMING:
-                        await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
-                    tts_stream.feed(chunk)
-                tts_stream.finish()
+                try:
+                    async for chunk in backend.chat_stream(transcript):
+                        full_response += chunk
+                        if perf_logger.is_enabled() and t_llm_first is None:
+                            t_llm_first = time.perf_counter()
+                            perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
+                        if SUBTITLE_STREAMING:
+                            await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
+                        tts_stream.feed(chunk)
+                finally:
+                    tts_stream.finish()  # 保证 finish() 被调用
                 if perf_logger.is_enabled():
                     perf_data["llm_gen_ms"] = (time.perf_counter() - t_llm_first) * 1000
 
@@ -328,44 +330,46 @@ async def websocket_endpoint(websocket: WebSocket):
                 first_chunk_received = False
                 buffer_start_time: Optional[float] = None
                 tts_start_time = asyncio.get_event_loop().time()
+                try:
+                    async for audio_chunk in tts_stream:
+                        buffer.extend(audio_chunk)
 
-                async for audio_chunk in tts_stream:
-                    buffer.extend(audio_chunk)
+                        if not first_chunk_received:
+                            first_chunk_received = True
+                            buffer_start_time = asyncio.get_event_loop().time()
+                            logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
 
-                    if not first_chunk_received:
-                        first_chunk_received = True
-                        buffer_start_time = asyncio.get_event_loop().time()
-                        logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
+                        current_time = asyncio.get_event_loop().time()
+                        time_buffer_elapsed = (
+                            (current_time - buffer_start_time) if buffer_start_time is not None else 0
+                        )
 
-                    current_time = asyncio.get_event_loop().time()
-                    time_buffer_elapsed = (
-                        (current_time - buffer_start_time) if buffer_start_time is not None else 0
-                    )
+                        if (
+                            len(buffer) >= TTS_DATA_BUFFER_SIZE
+                            and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
+                        ):
+                            audio_b64 = base64.b64encode(bytes(buffer)).decode()
+                            await websocket.send_json(
+                                {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
+                            )
+                            audio_chunks_sent += 1
+                            logger.debug(
+                                "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms",
+                                audio_chunks_sent,
+                                len(buffer),
+                                (current_time - tts_start_time) * 1000,
+                            )
+                            buffer = bytearray()
+                            buffer_start_time = asyncio.get_event_loop().time()
 
-                    if (
-                        len(buffer) >= TTS_DATA_BUFFER_SIZE
-                        and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
-                    ):
+                    if buffer:
                         audio_b64 = base64.b64encode(bytes(buffer)).decode()
                         await websocket.send_json(
                             {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
                         )
                         audio_chunks_sent += 1
-                        logger.debug(
-                            "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms",
-                            audio_chunks_sent,
-                            len(buffer),
-                            (current_time - tts_start_time) * 1000,
-                        )
-                        buffer = bytearray()
-                        buffer_start_time = asyncio.get_event_loop().time()
-
-                if buffer:
-                    audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                    await websocket.send_json(
-                        {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
-                    )
-                    audio_chunks_sent += 1
+                except asyncio.CancelledError:
+                    raise  # 重新抛出以符合 asyncio.gather 取消语义
 
             # 并行执行 LLM feed 和 TTS consume
             tts_start_time = asyncio.get_event_loop().time()
