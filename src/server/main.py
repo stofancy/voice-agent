@@ -265,6 +265,10 @@ async def websocket_endpoint(websocket: WebSocket):
 
         # Perf data dict, only populated when perf logging is enabled
         perf_data: dict = {}
+        t_llm_first: Optional[float] = None
+        t_llm_end: Optional[float] = None
+        t_tts_first: Optional[float] = None
+        t_tts_end: Optional[float] = None
 
         try:
             connection_state = "PROCESSING"
@@ -278,10 +282,6 @@ async def websocket_endpoint(websocket: WebSocket):
             if perf_logger.is_enabled():
                 t_stt_end = time.perf_counter()
                 perf_data["stt_ms"] = (t_stt_end - t_start) * 1000
-                t_llm_first: Optional[float] = None
-                t_llm_end: Optional[float] = None
-                t_tts_first: Optional[float] = None
-                t_tts_end: Optional[float] = None
 
             last_transcript = transcript
             await websocket.send_json(
@@ -326,9 +326,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async def tts_consume_loop():
                 """TTS 音频边产生边发送"""
-                nonlocal audio_chunks_sent
+                nonlocal audio_chunks_sent, t_tts_first, t_llm_end
+                logger.info("🔊 TTS consume loop started")
                 # 确保 TTS stream 已初始化（feed 会触发懒连接）
                 tts_stream._ensure_connected()
+                logger.info("🔊 TTS stream ensured connected")
                 buffer = bytearray()
                 first_chunk_received = False
                 buffer_start_time: Optional[float] = None
@@ -339,8 +341,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
                         if not first_chunk_received:
                             first_chunk_received = True
+                            t_tts_first = time.perf_counter()
+                            if perf_logger.is_enabled():
+                                perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
                             buffer_start_time = asyncio.get_event_loop().time()
-                            logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
+                            logger.info(f"🔊 TTS first chunk received, buffering {TTS_TIME_BUFFER_SECONDS}s...")
 
                         current_time = asyncio.get_event_loop().time()
                         time_buffer_elapsed = (
@@ -371,8 +376,13 @@ async def websocket_endpoint(websocket: WebSocket):
                             {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
                         )
                         audio_chunks_sent += 1
+                    logger.info(f"🔊 TTS consume loop finished, sent {audio_chunks_sent} chunks")
                 except asyncio.CancelledError:
+                    logger.warning("🔊 TTS consume loop cancelled")
                     raise  # 重新抛出以符合 asyncio.gather 取消语义
+                except Exception as e:
+                    logger.error(f"🔊 TTS consume loop error: {e}")
+                    raise
 
             # 并行执行 LLM feed 和 TTS consume
             tts_start_time = asyncio.get_event_loop().time()
