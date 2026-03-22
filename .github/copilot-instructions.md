@@ -39,9 +39,9 @@ Trigger phrases include (non-exhaustive):
         │                          │                          │
         ▼                          ▼                          ▼
     ┌────────┐            ┌─────────────┐         ┌──────────────┐
-    │ VAD    │            │ Bailian STT │         │ (Optional)   │
-    │(Silero)│            │(Qwen-ASR)   │         │ Faster-Whisper│
-    │Filter  │            │WebSocket    │         └──────────────┘
+    │ VAD    │            │ Bailian STT │
+    │(Silero)│            │(Qwen-ASR)   │
+    │Filter  │            │WebSocket    │
     │silence │            │→ Text       │
     └────────┘            └─────────────┘
         │                       │
@@ -68,13 +68,12 @@ Trigger phrases include (non-exhaustive):
 
 | Component | Module | Purpose |
 |-----------|--------|---------|
-| **Speech-to-Text** | `src/server/bailian_stt.py` | Convert audio → text via Alibaba Qwen-ASR |
-| **AI Backend** | `src/server/backend.py` | Connect to OpenAI/OpenClaw/custom (async streaming) |
-| **Text-to-Speech** | `src/server/bailian_tts.py` | Stream text → audio via Alibaba Qwen-TTS |
+| **Speech-to-Text** | `src/server/stt/bailian_stt.py` | Convert audio → text via Alibaba Qwen-ASR |
+| **AI Backend** | `src/server/llm/openai_llm.py` | Connect to OpenAI/OpenClaw/custom (async streaming) |
+| **Text-to-Speech** | `src/server/tts/bailian_tts.py` | Stream text → audio via Alibaba Qwen-TTS |
 | **Voice Activity Detection** | `src/server/vad.py` | Filter silence using Silero VAD |
 | **WebSocket Handler** | `src/server/main.py` | Orchestrate real-time pipeline |
 | **Auth** | `src/server/auth.py` | Token management (Telegram Bot API style) |
-| **Text Cleaning** | `src/server/text_utils.py` | Strip markdown/URLs/hashtags before TTS |
 
 ---
 
@@ -91,7 +90,7 @@ OPENCLAW_MASTER_KEY=your-admin-key              # Admin access
 
 **STT (Speech-to-Text)**:
 ```env
-OPENCLAW_STT_MODEL=qwen3-asr-flash              # Bailian model (or 'whisper')
+OPENCLAW_STT_MODEL=qwen3-asr-flash              # Bailian Qwen-ASR model
 OPENCLAW_STT_DEVICE=auto                        # CPU/CUDA/MPS auto-detection
 OPENCLAW_STT_LANGUAGE=zh                        # Recognition language
 ```
@@ -117,9 +116,9 @@ Runtime selection in current code:
 
 **Backend Server**:
 - [src/server/main.py](../src/server/main.py) - FastAPI WebSocket server, Settings
-- [src/server/backend.py](../src/server/backend.py) - AI backend (OpenAI/OpenClaw/Bailian)
-- [src/server/bailian_stt.py](../src/server/bailian_stt.py) - STT implementation
-- [src/server/bailian_tts.py](../src/server/bailian_tts.py) - TTS with streaming
+- [src/server/llm/openai_llm.py](../src/server/llm/openai_llm.py) - LLM provider (OpenAI compatible)
+- [src/server/stt/bailian_stt.py](../src/server/stt/bailian_stt.py) - STT implementation
+- [src/server/tts/bailian_tts.py](../src/server/tts/bailian_tts.py) - TTS with streaming
 - [src/server/auth.py](../src/server/auth.py) - Token-based auth
 - [src/server/vad.py](../src/server/vad.py) - Voice activity detection
 
@@ -165,7 +164,7 @@ pip install -r requirements.txt
 pip install -e ".[dev]"  # Install extras for development
 
 # 4. (Optional) Install STT/TTS extras for local models
-pip install torch torchaudio  # For VAD, faster-whisper
+pip install torch torchaudio  # For VAD
 
 # 5. Configure
 cp .env.example .env
@@ -189,8 +188,9 @@ PYTHONPATH=. python -m src.server.main
 3. Check browser DevTools for console errors
 
 **Adding Features**:
-- New STT backend? Extend [src/server/bailian_stt.py](../src/server/bailian_stt.py)
-- New AI backend? Add to [src/server/backend.py](../src/server/backend.py)
+- New STT backend? Implement `BaseSTT` in `src/server/stt/`
+- New LLM backend? Implement `BaseLLM` in `src/server/llm/`
+- New TTS backend? Implement `BaseTTS` in `src/server/tts/`
 - New auth strategy? Update [src/server/auth.py](../src/server/auth.py)
 
 ### Testing
@@ -280,8 +280,8 @@ except Exception as e:
 
 ### Add a New AI Backend
 
-1. Create handler in [src/server/backend.py](../src/server/backend.py)
-2. Add to `_setup_client()` method
+1. Create `src/server/llm/your_llm.py` implementing `BaseLLM`
+2. Register in `src/server/llm/factory.py`
 3. Implement `chat_stream()` async generator
 4. Add env var to [src/server/main.py](../src/server/main.py) Settings
 5. Test with WebSocket client
@@ -318,7 +318,7 @@ OPENCLAW_REQUIRE_AUTH=true docker compose up -d
 | **WebSocket connection fails** | Server not running / different port | Check `OPENCLAW_PORT`, ensure server running: `python -m src.server.main` |
 | **No audio transcription** | STT API key missing / model unavailable | Set `ALI_BAILIAN_API_KEY` or `OPENAI_API_KEY`; verify model name |
 | **TTS audio not playing** | Incorrect audio format / codec mismatch | Ensure 16kHz PCM; check browser DevTools audio context |
-| **High latency** | Large Whisper model / slow backend | Use `qwen3-asr-flash` for STT; enable streaming TTS |
+| **High latency** | Slow STT/TTS backend | Use `qwen3-asr-flash` for STT; enable streaming TTS |
 | **CORS errors (frontend)** | Browser blocking requests | Server handles CORS; ensure StaticFiles mounted correctly |
 | **Import errors** | Missing dependencies | Run `pip install -r requirements.txt` + `pip install .[dev]` |
 
@@ -346,11 +346,12 @@ OPENCLAW_REQUIRE_AUTH=true docker compose up -d
 
 ## 🔑 Key Modules Explained
 
-### AIBackend (src/server/backend.py)
+### LLM Factory (src/server/llm/)
 
-Abstraction for different AI providers. Automatically selects:
-1. OpenClaw Gateway (if `OPENCLAW_GATEWAY_URL` + `OPENCLAW_GATEWAY_TOKEN`)
-2. Bailian direct fallback (if Gateway env vars are not set)
+Factory pattern for LLM providers. Selects based on `OPENCLAW_LLM_PROVIDER`:
+- `openai_gateway` → OpenClaw Gateway
+- `bailian` → DashScope compatible endpoint
+- `gemini` → Gemini API
 
 All use OpenAI-compatible API format for consistency.
 

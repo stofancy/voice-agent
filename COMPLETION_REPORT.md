@@ -1,3 +1,5 @@
+> **[Archived]** This document is a historical record of the Bailian integration (2026-03-16) and may not reflect the current architecture.
+
 # 🦞 OpenClaw Voice - 百炼集成完成报告
 
 **任务**: 创建 Docker 隔离环境测试 voice capability，集成阿里百炼 STT/TTS
