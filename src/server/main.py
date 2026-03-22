@@ -93,6 +93,7 @@ async def startup():
     global stt, tts, backend, vad
 
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
+    logger.info(f"TTS config: DATA_BUFFER={TTS_DATA_BUFFER_SIZE} bytes, TIME_BUFFER={TTS_TIME_BUFFER_SECONDS}s, STREAMING={TTS_STREAMING}")
 
     load_keys_from_env()
     if settings.require_auth:
