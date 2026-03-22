@@ -322,8 +322,9 @@ async def websocket_endpoint(websocket: WebSocket):
                         tts_stream.feed(chunk)
                 finally:
                     tts_stream.finish()  # 保证 finish() 被调用
+                    t_llm_end = time.perf_counter()
                 if perf_logger.is_enabled() and t_llm_first is not None:
-                    perf_data["llm_gen_ms"] = (time.perf_counter() - t_llm_first) * 1000
+                    perf_data["llm_gen_ms"] = (t_llm_end - t_llm_first) * 1000
 
             async def tts_consume_loop():
                 """TTS 音频边产生边发送"""
