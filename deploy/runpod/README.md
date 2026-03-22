@@ -1,3 +1,5 @@
+> **[Archived]** This deployment guide references an older architecture (Whisper-based) and may not reflect the current setup.
+
 # Deploy OpenClaw Voice on RunPod
 
 Deploy OpenClaw Voice on RunPod for GPU-accelerated voice inference.
