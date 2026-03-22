@@ -266,6 +266,10 @@ async def websocket_endpoint(websocket: WebSocket):
         t_tts_first: Optional[float] = None
         t_tts_end: Optional[float] = None
 
+        # Per-turn state shared between llm_feed_loop and tts_consume_loop
+        audio_chunks_sent = 0
+        tts_start_time: float = 0.0
+
         try:
             connection_state = "PROCESSING"
 
@@ -322,7 +326,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async def tts_consume_loop():
                 """TTS 音频边产生边发送"""
-                nonlocal audio_chunks_sent, t_tts_first, t_llm_end
+                nonlocal audio_chunks_sent, t_tts_first, t_llm_end, tts_start_time
                 logger.info("🔊 TTS consume loop started")
                 # 确保 TTS stream 已初始化（feed 会触发懒连接）
                 tts_stream._ensure_connected()
@@ -381,7 +385,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     raise
 
             # 并行执行 LLM feed 和 TTS consume
-            audio_chunks_sent = 0
             await asyncio.gather(llm_feed_loop(), tts_consume_loop())
 
             tts_total_time = asyncio.get_event_loop().time() - tts_start_time
@@ -397,17 +400,32 @@ async def websocket_endpoint(websocket: WebSocket):
         except asyncio.CancelledError:
             logger.info("🔴 Response task cancelled")
             if tts_started:
-                await websocket.send_json({"type": "tts_end", "interrupted": True})
-            await send_listening_stopped_once()
+                try:
+                    await websocket.send_json({"type": "tts_end", "interrupted": True})
+                except (WebSocketDisconnect, RuntimeError):
+                    pass  # WebSocket already closed
+            try:
+                await send_listening_stopped_once()
+            except (WebSocketDisconnect, RuntimeError):
+                pass
             raise
         except Exception as e:
             logger.error(f"AI/TTS error: {type(e).__name__}: {e}")
             fallback = "Sorry, I had trouble processing that. Could you try again?"
-            await websocket.send_json({"type": "response_chunk", "text": fallback})
-            await websocket.send_json({"type": "response_complete", "text": fallback})
+            try:
+                await websocket.send_json({"type": "response_chunk", "text": fallback})
+                await websocket.send_json({"type": "response_complete", "text": fallback})
+            except (WebSocketDisconnect, RuntimeError):
+                pass  # WebSocket already closed
             if tts_started:
-                await websocket.send_json({"type": "tts_end", "interrupted": True})
-            await send_listening_stopped_once()
+                try:
+                    await websocket.send_json({"type": "tts_end", "interrupted": True})
+                except (WebSocketDisconnect, RuntimeError):
+                    pass
+            try:
+                await send_listening_stopped_once()
+            except (WebSocketDisconnect, RuntimeError):
+                pass
 
     async def cancel_response(send_interrupt_event: bool):
         nonlocal response_task
