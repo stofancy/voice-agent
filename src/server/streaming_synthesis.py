@@ -92,7 +92,7 @@ class StreamingSynthesis:
         t_llm_first: Optional[float] = None
         t_llm_end: Optional[float] = None
         t_tts_first: Optional[float] = None
-        tts_start_time = asyncio.get_event_loop().time()
+        tts_start_time = asyncio.get_running_loop().time()
         audio_chunks_sent = 0
 
         async def llm_feed_loop():
@@ -135,12 +135,12 @@ class StreamingSynthesis:
                         t_tts_first = time.perf_counter()
                         if t_llm_first is not None:
                             metrics.tts_ttfa_ms = (t_tts_first - t_llm_first) * 1000
-                        buffer_start_time = asyncio.get_event_loop().time()
+                        buffer_start_time = asyncio.get_running_loop().time()
                         logger.info(
                             f"🔊 TTS first chunk received, buffering {self._config.time_buffer_seconds}s..."
                         )
 
-                    current_time = asyncio.get_event_loop().time()
+                    current_time = asyncio.get_running_loop().time()
                     time_buffer_elapsed = (
                         (current_time - buffer_start_time) if buffer_start_time is not None else 0
                     )
@@ -158,7 +158,7 @@ class StreamingSynthesis:
                             (current_time - tts_start_time) * 1000,
                         )
                         buffer = bytearray()
-                        buffer_start_time = asyncio.get_event_loop().time()
+                        buffer_start_time = asyncio.get_running_loop().time()
 
                 if buffer:
                     await self._ws.send_audio_chunk(bytes(buffer), self._config.sample_rate)
@@ -176,7 +176,7 @@ class StreamingSynthesis:
         await asyncio.gather(llm_feed_loop(), tts_consume_loop())
 
         # Calculate metrics
-        tts_total_time = asyncio.get_event_loop().time() - tts_start_time
+        tts_total_time = asyncio.get_running_loop().time() - tts_start_time
         logger.info(
             "🔊 TTS complete: {} chunks, total {:.1f}ms", audio_chunks_sent, tts_total_time * 1000
         )
