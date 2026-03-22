@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 @dataclass
 class SynthesisConfig:
     """Configuration for TTS buffering."""
+
     data_buffer_size: int = 8192
     time_buffer_seconds: float = 0.1
     sample_rate: int = 24000
@@ -28,9 +29,10 @@ class SynthesisConfig:
 @dataclass
 class SynthesisMetrics:
     """Performance metrics collected during synthesis execution."""
+
     llm_ttft_ms: Optional[float] = None  # Time to first token
-    llm_gen_ms: Optional[float] = None   # Total LLM generation time
-    tts_ttfa_ms: Optional[float] = None   # Time to first audio
+    llm_gen_ms: Optional[float] = None  # Total LLM generation time
+    tts_ttfa_ms: Optional[float] = None  # Time to first audio
     tts_total_ms: Optional[float] = None  # Total TTS time
     audio_chunks_sent: int = 0
 
@@ -38,6 +40,7 @@ class SynthesisMetrics:
 @dataclass
 class SynthesisResult:
     """Result of a synthesis execution."""
+
     full_response: str
     metrics: SynthesisMetrics
 
@@ -85,6 +88,7 @@ class StreamingSynthesis:
 
         # Metrics tracking
         metrics = SynthesisMetrics()
+        t_start = time.perf_counter()
         t_llm_first: Optional[float] = None
         t_llm_end: Optional[float] = None
         t_tts_first: Optional[float] = None
@@ -129,10 +133,12 @@ class StreamingSynthesis:
                     if not first_chunk_received:
                         first_chunk_received = True
                         t_tts_first = time.perf_counter()
-                        if t_llm_end is not None:
-                            metrics.tts_ttfa_ms = (t_tts_first - t_llm_end) * 1000
+                        if t_llm_first is not None:
+                            metrics.tts_ttfa_ms = (t_tts_first - t_llm_first) * 1000
                         buffer_start_time = asyncio.get_event_loop().time()
-                        logger.info(f"🔊 TTS first chunk received, buffering {self._config.time_buffer_seconds}s...")
+                        logger.info(
+                            f"🔊 TTS first chunk received, buffering {self._config.time_buffer_seconds}s..."
+                        )
 
                     current_time = asyncio.get_event_loop().time()
                     time_buffer_elapsed = (
@@ -143,9 +149,7 @@ class StreamingSynthesis:
                         len(buffer) >= self._config.data_buffer_size
                         and time_buffer_elapsed >= self._config.time_buffer_seconds
                     ):
-                        await self._ws.send_audio_chunk(
-                            bytes(buffer), self._config.sample_rate
-                        )
+                        await self._ws.send_audio_chunk(bytes(buffer), self._config.sample_rate)
                         audio_chunks_sent += 1
                         logger.debug(
                             "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms",
@@ -157,9 +161,7 @@ class StreamingSynthesis:
                         buffer_start_time = asyncio.get_event_loop().time()
 
                 if buffer:
-                    await self._ws.send_audio_chunk(
-                        bytes(buffer), self._config.sample_rate
-                    )
+                    await self._ws.send_audio_chunk(bytes(buffer), self._config.sample_rate)
                     audio_chunks_sent += 1
                 logger.info(f"🔊 TTS consume loop finished, sent {audio_chunks_sent} chunks")
 
@@ -175,9 +177,11 @@ class StreamingSynthesis:
 
         # Calculate metrics
         tts_total_time = asyncio.get_event_loop().time() - tts_start_time
-        logger.info("🔊 TTS complete: {} chunks, total {:.1f}ms", audio_chunks_sent, tts_total_time * 1000)
+        logger.info(
+            "🔊 TTS complete: {} chunks, total {:.1f}ms", audio_chunks_sent, tts_total_time * 1000
+        )
 
-        metrics.llm_ttft_ms = (t_llm_first - t_llm_end) * 1000 if t_llm_first and t_llm_end else None
+        metrics.llm_ttft_ms = (t_llm_first - t_start) * 1000 if t_llm_first else None
         metrics.llm_gen_ms = (t_llm_end - t_llm_first) * 1000 if t_llm_first and t_llm_end else None
         metrics.tts_total_ms = tts_total_time * 1000
         metrics.audio_chunks_sent = audio_chunks_sent
