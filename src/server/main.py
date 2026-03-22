@@ -36,7 +36,15 @@ from .streaming_synthesis import StreamingSynthesis, SynthesisConfig
 from .connection import WebSocketConnection, ConnectionStateMachine, ConnectionState
 from .turn_context import TurnContext
 from .voice_turn import VoiceTurn
-from .messages import parse_message
+from .messages import parse_message, MessageType
+from .message_router import (
+    handle_start_listening,
+    handle_stop_listening,
+    handle_interrupt,
+    handle_audio,
+    handle_ping,
+    handle_perf_report,
+)
 
 
 TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
@@ -283,73 +291,62 @@ async def websocket_endpoint(websocket: WebSocket):
             logger.debug(f"📨 Received: {msg_type}")
 
             if msg_type == "start_listening":
-                await cancel_response(send_interrupt_event=False)
-                audio_buffer.clear()
-                connection_state.transition_to(ConnectionState.LISTENING)
-                await websocket.send_json({"type": "listening_started"})
+                await handle_start_listening(
+                    websocket=websocket,
+                    connection_state=connection_state,
+                    audio_buffer=audio_buffer,
+                    cancel_callback=cancel_response,
+                )
 
             elif msg_type == "stop_listening":
-                if not connection_state.is_listening():
-                    await send_listening_stopped_once()
-                    continue
-
-                if not audio_buffer:
-                    await send_listening_stopped_once()
-                    continue
-
-                audio_data = audio_buffer.concatenate()
-                audio_buffer.clear()
-                turn_context.reset()
-                voice_turn = VoiceTurn(
-                    stt=stt,
-                    llm=backend,
-                    tts=tts,
-                    websocket=WebSocketConnection(websocket),
-                    config=SynthesisConfig(
-                        data_buffer_size=TTS_DATA_BUFFER_SIZE,
-                        time_buffer_seconds=TTS_TIME_BUFFER_SECONDS,
-                        sample_rate=TTS_SAMPLE_RATE,
-                        subtitle_streaming=SUBTITLE_STREAMING,
-                    ),
+                new_task = await handle_stop_listening(
+                    websocket=websocket,
+                    connection_state=connection_state,
+                    audio_buffer=audio_buffer,
                     turn_context=turn_context,
+                    send_listening_stopped_once=send_listening_stopped_once,
+                    stt=stt,
+                    backend=backend,
+                    tts=tts,
+                    TTS_DATA_BUFFER_SIZE=TTS_DATA_BUFFER_SIZE,
+                    TTS_TIME_BUFFER_SECONDS=TTS_TIME_BUFFER_SECONDS,
+                    TTS_SAMPLE_RATE=TTS_SAMPLE_RATE,
+                    SUBTITLE_STREAMING=SUBTITLE_STREAMING,
                 )
-                response_task = asyncio.create_task(voice_turn.execute(audio_data))
+                if new_task is None and connection_state.is_idle():
+                    # Early continue was triggered in handler
+                    continue
+                if new_task:
+                    response_task = new_task
 
             elif msg_type == "interrupt":
-                await websocket.send_json({"type": "interrupt_ack"})
-                await cancel_response(send_interrupt_event=True)
+                await handle_interrupt(
+                    websocket=websocket,
+                    cancel_callback=cancel_response,
+                )
 
             elif msg_type == "audio" and connection_state.is_listening():
-                audio_np = np.frombuffer(message.audio_data, dtype=np.float32)
-                audio_buffer.append(audio_np)
-
-                if vad and len(audio_np) > 0:
-                    has_speech = vad.is_speech(audio_np)
-                    await websocket.send_json(
-                        {
-                            "type": "vad_status",
-                            "speech_detected": has_speech,
-                        }
-                    )
+                await handle_audio(
+                    message=message,
+                    websocket=websocket,
+                    connection_state=connection_state,
+                    audio_buffer=audio_buffer,
+                    vad=vad,
+                )
 
             elif msg_type == "ping":
-                await websocket.send_json({"type": "pong"})
+                await handle_ping(websocket=websocket)
 
             elif msg_type == "perf_report":
-                if perf_logger.is_enabled():
-                    frontend_metrics = message.metrics
-                    context = {
-                        "transcript": last_transcript,
-                        "response_length": len(last_response),
-                        "tts_model": settings.tts_model,
-                        "llm_model": backend.model_name if backend else "unknown",
-                        "tts_voice": settings.tts_voice,
-                    }
-                    perf_logger.log_round(
-                        frontend_data=frontend_metrics,
-                        backend_data=last_perf_data,
-                        context=context,
-                    )
+                await handle_perf_report(
+                    message=message,
+                    perf_logger=perf_logger,
+                    last_transcript=last_transcript,
+                    last_response=last_response,
+                    last_perf_data=last_perf_data,
+                    settings=settings,
+                    backend=backend,
+                )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
