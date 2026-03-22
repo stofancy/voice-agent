@@ -133,10 +133,10 @@ class BailianTTS:
                                             # 记录第一个音频块的时间
                                             if first_chunk_time is None:
                                                 first_chunk_time = line_received_at
-                                                logger.info(f"🔊 TTS 首块延迟：{(line_received_at - start_time)*1000:.1f}ms")
-                                            
+                                                logger.info(f"🔊 TTS 首块延迟：{(line_received_at - first_chunk_time)*1000:.1f}ms")
+
                                             # 记录每个音频块的详细信息
-                                            logger.debug(f"🔊 TTS 音频块 #{audio_chunk_count}: {len(decoded_audio)} bytes, 延迟 {(line_received_at - start_time)*1000:.1f}ms")
+                                            logger.debug(f"🔊 TTS 音频块 #{audio_chunk_count}: {len(decoded_audio)} bytes, 延迟 {(line_received_at - first_chunk_time)*1000:.1f}ms")
                                             
                                             yield decoded_audio
                                     else:
@@ -145,7 +145,7 @@ class BailianTTS:
                                     logger.error(f"🔊 TTS JSON 解析失败：{e}")
                                     continue
                     
-                    total_time = asyncio.get_event_loop().time() - start_time
+                    total_time = asyncio.get_event_loop().time() - first_chunk_time if first_chunk_time else 0
                     logger.info(f"🔊 TTS 流式完成：{audio_chunk_count} 块，{total_bytes} bytes, 总耗时 {total_time*1000:.1f}ms, 平均 {(total_time/audio_chunk_count)*1000:.1f}ms/块")
                 else:
                     # 非流式：获取完整音频 URL
