@@ -55,7 +55,7 @@ class RealtimeTTSStream(TTSStream):
         if self._connected:
             return
 
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self._queue = asyncio.Queue()
 
         callback = _StreamCallback(self._queue, self._loop)
