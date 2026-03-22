@@ -18,6 +18,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 from . import perf_logger
@@ -72,10 +73,11 @@ class Settings(BaseSettings):
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
 
-    class Config:
-        env_prefix = "OPENCLAW_"
-        env_file = ".env"
-        extra = "allow"
+    model_config = ConfigDict(
+        env_prefix="OPENCLAW_",
+        env_file=".env",
+        extra="allow",
+    )
 
 
 settings = Settings()
@@ -93,7 +95,9 @@ async def startup():
     global stt, tts, backend, vad
 
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
-    logger.info(f"TTS config: DATA_BUFFER={TTS_DATA_BUFFER_SIZE} bytes, TIME_BUFFER={TTS_TIME_BUFFER_SECONDS}s, STREAMING={TTS_STREAMING}")
+    logger.info(
+        f"TTS config: DATA_BUFFER={TTS_DATA_BUFFER_SIZE} bytes, TIME_BUFFER={TTS_TIME_BUFFER_SECONDS}s, STREAMING={TTS_STREAMING}"
+    )
 
     load_keys_from_env()
     if settings.require_auth:
