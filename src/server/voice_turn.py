@@ -5,26 +5,16 @@ Handles a complete voice turn: STT → StreamingSynthesis → WebSocket messages
 """
 
 import asyncio
-import base64
-import time
-from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 from loguru import logger
 
 from .connection import ConnectionState, ConnectionStateMachine, WebSocketConnection
+from .streaming_synthesis import StreamingSynthesis, SynthesisConfig
 
-
-@dataclass
-class TurnMetrics:
-    """Metrics collected during a voice turn."""
-    stt_ms: Optional[float] = None
-    llm_ttft_ms: Optional[float] = None
-    llm_gen_ms: Optional[float] = None
-    tts_ttfa_ms: Optional[float] = None
-    tts_total_ms: Optional[float] = None
-    audio_chunks_sent: int = 0
+if TYPE_CHECKING:
+    from .turn_context import TurnContext
 
 
 class VoiceTurn:
@@ -39,9 +29,11 @@ class VoiceTurn:
     Usage:
         turn = VoiceTurn(
             stt=stt,
-            synthesis=streaming_synthesis,
+            llm=llm,
+            tts=tts,
             websocket=ws,
-            config=turn_config,
+            config=synthesis_config,
+            turn_context=turn_context,
         )
         result = await turn.execute(audio_data)
     """
@@ -49,17 +41,21 @@ class VoiceTurn:
     def __init__(
         self,
         stt,  # BaseSTT
-        synthesis,  # StreamingSynthesis
+        llm,  # BaseLLM
+        tts,  # BaseTTS
         websocket: WebSocketConnection,
-        config,  # TurnConfig or similar
+        config: SynthesisConfig,
+        turn_context: "TurnContext",
     ):
         self._stt = stt
-        self._synthesis = synthesis
+        self._llm = llm
+        self._tts = tts
         self._ws = websocket
         self._config = config
+        self._turn_context = turn_context
         self._state = ConnectionStateMachine()
 
-    async def execute(self, audio_data: np.ndarray) -> tuple[str, TurnMetrics]:
+    async def execute(self, audio_data: np.ndarray) -> str:
         """
         Execute a complete voice turn.
 
@@ -67,45 +63,71 @@ class VoiceTurn:
             audio_data: Audio numpy array from STT
 
         Returns:
-            Tuple of (full_response, metrics)
+            Full response string
         """
-        metrics = TurnMetrics()
-        t_start = time.perf_counter()
-
-        # STT stage
         self._state.transition_to(ConnectionState.PROCESSING)
-        transcript, success = await self._stt.transcribe(audio_data)
+        tts_started = False
 
-        t_stt_end = time.perf_counter()
-        metrics.stt_ms = (t_stt_end - t_start) * 1000
+        try:
+            # STT stage
+            transcript, success = await self._stt.transcribe(audio_data)
+            await self._ws.send_transcript(transcript)
+            logger.info(f"🎤 Transcript: {transcript}")
 
-        await self._ws.send_transcript(transcript)
-        logger.info(f"🎤 Transcript: {transcript}")
+            if not transcript.strip() or not success:
+                self._state.transition_to(ConnectionState.IDLE)
+                await self._ws.send_listening_stopped()
+                return ""
 
-        if not transcript.strip() or not success:
-            self._state.transition_to(ConnectionState.IDLE)
-            await self._ws.send_listening_stopped()
-            return "", metrics
+            # LLM + TTS streaming
+            self._state.transition_to(ConnectionState.SPEAKING)
+            await self._ws.send_tts_start()
+            tts_started = True
 
-        # LLM + TTS streaming
-        self._state.transition_to(ConnectionState.SPEAKING)
-        await self._ws.send_tts_start()
+            synthesis = StreamingSynthesis(
+                llm=self._llm,
+                tts=self._tts,
+                websocket=self._ws,
+                config=self._config,
+                turn_context=self._turn_context,
+            )
 
-        result = await self._synthesis.run(transcript)
+            try:
+                result = await synthesis.run(transcript)
+                full_response = result.full_response
 
-        # Update metrics from synthesis result
-        metrics.llm_ttft_ms = result.metrics.llm_ttft_ms
-        metrics.llm_gen_ms = result.metrics.llm_gen_ms
-        metrics.tts_ttfa_ms = result.metrics.tts_ttfa_ms
-        metrics.tts_total_ms = result.metrics.tts_total_ms
-        metrics.audio_chunks_sent = result.metrics.audio_chunks_sent
+                await self._ws.send_tts_end(interrupted=False)
+                await self._ws.send_response_complete(full_response)
+                self._state.transition_to(ConnectionState.IDLE)
+                await self._ws.send_listening_stopped()
 
-        await self._ws.send_tts_end(interrupted=False)
-        await self._ws.send_response_complete(result.full_response)
-        self._state.transition_to(ConnectionState.IDLE)
-        await self._ws.send_listening_stopped()
+                return full_response
 
-        return result.full_response, metrics
+            except asyncio.CancelledError:
+                logger.info("🔴 Response task cancelled")
+                raise
+
+        except asyncio.CancelledError:
+            logger.info("🔴 Voice turn cancelled")
+            if tts_started:
+                try:
+                    await self._ws.send_tts_end(interrupted=True)
+                except Exception:
+                    pass  # WebSocket may already be closed
+            raise
+        except Exception as e:
+            logger.error(f"AI/TTS error: {type(e).__name__}: {e}")
+            fallback = "Sorry, I had trouble processing that. Could you try again?"
+            try:
+                await self._ws.send_response_complete(fallback)
+            except Exception:
+                pass
+            if tts_started:
+                try:
+                    await self._ws.send_tts_end(interrupted=True)
+                except Exception:
+                    pass
+            raise
 
     async def handle_interrupt(self):
         """Handle an interrupt request."""
