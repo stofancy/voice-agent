@@ -33,7 +33,7 @@ jobs:
       - name: Run unit tests
         run: |
           source .venv/bin/activate
-          pytest tests/test_modules.py -v
+          pytest tests/unit/ -v
       
       - name: Run server tests
         run: |
