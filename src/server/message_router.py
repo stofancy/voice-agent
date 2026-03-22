@@ -3,7 +3,7 @@ Message handler functions for WebSocket message handling.
 """
 
 import asyncio
-from typing import TYPE_CHECKING, Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Optional
 
 from .connection import ConnectionState, ConnectionStateMachine, WebSocketConnection
 from .messages import WSMessage, AudioMessage, PerfReportMessage
