@@ -11,6 +11,7 @@ WebSocket server that handles:
 
 import asyncio
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
@@ -81,7 +82,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
 stt = None
 tts = None
@@ -89,11 +89,12 @@ backend = None
 vad: Optional[VoiceActivityDetector] = None
 
 
-@app.on_event("startup")
-async def startup():
-    """Initialize models on server start."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage server startup and shutdown."""
     global stt, tts, backend, vad
 
+    # Startup
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
     logger.info(
         f"TTS config: DATA_BUFFER={TTS_DATA_BUFFER_SIZE} bytes, TIME_BUFFER={TTS_TIME_BUFFER_SECONDS}s, STREAMING={TTS_STREAMING}"
@@ -140,14 +141,15 @@ async def startup():
     vad = VoiceActivityDetector()
     logger.info("✅ OpenClaw Voice server (Bailian) ready!")
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown():
-    """Release network resources on server stop."""
-    global backend
+    # Shutdown
     if backend:
         await backend.close()
         logger.info("✅ Backend connections closed")
+
+
+app = FastAPI(title="OpenClaw Voice", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/")
