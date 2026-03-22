@@ -5,7 +5,7 @@ Handles a complete voice turn: STT → StreamingSynthesis → WebSocket messages
 """
 
 import asyncio
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 from loguru import logger
@@ -26,6 +26,16 @@ class VoiceTurn:
     - LLM + TTS streaming (via StreamingSynthesis)
     - WebSocket message state machine
 
+    Args:
+        stt: Speech-to-text provider
+        llm: Language model provider
+        tts: Text-to-speech provider
+        websocket: WebSocket connection wrapper
+        config: Synthesis configuration
+        turn_context: Per-turn context for cancellation
+        connection_state: Optional shared state machine. If not provided,
+            creates an internal one (for isolated testing).
+
     Usage:
         turn = VoiceTurn(
             stt=stt,
@@ -34,6 +44,7 @@ class VoiceTurn:
             websocket=ws,
             config=synthesis_config,
             turn_context=turn_context,
+            connection_state=session.connection_state,
         )
         result = await turn.execute(audio_data)
     """
@@ -46,6 +57,7 @@ class VoiceTurn:
         websocket: WebSocketConnection,
         config: SynthesisConfig,
         turn_context: "TurnContext",
+        connection_state: Optional[ConnectionStateMachine] = None,
     ):
         self._stt = stt
         self._llm = llm
@@ -53,7 +65,7 @@ class VoiceTurn:
         self._ws = websocket
         self._config = config
         self._turn_context = turn_context
-        self._state = ConnectionStateMachine()
+        self._state = connection_state or ConnectionStateMachine()
 
     async def execute(self, audio_data: np.ndarray) -> str:
         """
@@ -128,8 +140,3 @@ class VoiceTurn:
                 except Exception:
                     pass
             raise
-
-    async def handle_interrupt(self):
-        """Handle an interrupt request."""
-        self._state.transition_to(ConnectionState.IDLE)
-        await self._ws.send_interrupt_ack()
