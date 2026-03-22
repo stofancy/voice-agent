@@ -66,6 +66,7 @@ async def handle_stop_listening(
             subtitle_streaming=SUBTITLE_STREAMING,
         ),
         turn_context=session.turn_context,
+        connection_state=session.connection_state,
     )
     task = asyncio.create_task(voice_turn.execute(audio_data))
     session.start_response(task)
@@ -94,10 +95,12 @@ async def handle_audio(
 
     if vad and len(audio_np) > 0:
         has_speech = vad.is_speech(audio_np)
-        await session.websocket.send_json({
-            "type": "vad_status",
-            "speech_detected": has_speech,
-        })
+        await session.websocket.send_json(
+            {
+                "type": "vad_status",
+                "speech_detected": has_speech,
+            }
+        )
     return True
 
 
