@@ -20,3 +20,5 @@ build/
 tests/e2e/test_run.log*
 node_modules/
 **/node_modules/
+.voice.pid
+logs/
