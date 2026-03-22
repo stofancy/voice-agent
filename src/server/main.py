@@ -309,7 +309,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async def llm_feed_loop():
                 """LLM 产生 token → feed 给 TTS → 发送字幕"""
-                nonlocal full_response, t_llm_first
+                nonlocal full_response, t_llm_first, t_llm_end
                 t_llm_first = None  # 避免 UnboundLocalError
                 try:
                     async for chunk in backend.chat_stream(transcript):
