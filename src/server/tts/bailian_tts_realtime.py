@@ -7,10 +7,8 @@ LLM 每产出一个 token 就 feed() 给 TTS，TTS 自行决定何时开始合�
 
 import asyncio
 import base64
-import threading
 from typing import AsyncGenerator, Optional
 
-import dashscope
 from dashscope.audio.qwen_tts_realtime import (
     AudioFormat,
     QwenTtsRealtime,
@@ -60,34 +58,37 @@ class RealtimeTTSStream(TTSStream):
         self._loop = asyncio.get_event_loop()
         self._queue = asyncio.Queue()
 
-        dashscope.api_key = self._api_key
-
         callback = _StreamCallback(self._queue, self._loop)
         self._tts = QwenTtsRealtime(
             model=self._model,
             callback=callback,
             url=self._base_url,
         )
+        # Override instance-level api key instead of setting global dashscope.api_key
+        # to avoid race condition with concurrent streams
+        self._tts.apikey = self._api_key
         self._tts.connect()
 
         # 配置 session
-        kwargs = dict(
+        # SDK type hints are incomplete for update_session, using direct params
+        self._tts.update_session(
             voice=self._voice,
             response_format=AudioFormat.PCM_24000HZ_MONO_16BIT,
             mode="server_commit",
+            **(
+                {"instructions": self._instructions, "optimize_instructions": True}
+                if self._instructions
+                else {}
+            ),
         )
-        if self._instructions:
-            kwargs["instructions"] = self._instructions
-            kwargs["optimize_instructions"] = True
-
-        self._tts.update_session(**kwargs)
         self._connected = True
         logger.debug(f"🔊 RealtimeTTSStream connected: model={self._model}, voice={self._voice}")
 
     def feed(self, text: str) -> None:
         self._ensure_connected()
-        if text:
-            self._tts.append_text(text)
+        tts = self._tts
+        if text and tts is not None:
+            tts.append_text(text)
 
     def finish(self) -> None:
         if self._tts and self._connected:
@@ -118,17 +119,17 @@ class _StreamCallback(QwenTtsRealtimeCallback):
     def on_open(self) -> None:
         logger.debug("🔊 TTS Realtime WebSocket opened")
 
-    def on_close(self, code, msg) -> None:
-        logger.debug(f"🔊 TTS Realtime WebSocket closed: code={code}, msg={msg}")
+    def on_close(self, close_status_code, close_msg) -> None:
+        logger.debug(f"🔊 TTS Realtime WebSocket closed: code={close_status_code}, msg={close_msg}")
         # 确保迭代器能退出
         self._loop.call_soon_threadsafe(self._queue.put_nowait, None)
 
-    def on_event(self, response: dict) -> None:
+    def on_event(self, message: dict) -> None:  # type: ignore
         try:
-            etype = response.get("type", "")
+            etype = message.get("type", "")
 
             if etype == "response.audio.delta":
-                audio_bytes = base64.b64decode(response["delta"])
+                audio_bytes = base64.b64decode(message["delta"])
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, audio_bytes)
 
             elif etype == "session.finished":
@@ -136,7 +137,7 @@ class _StreamCallback(QwenTtsRealtimeCallback):
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, None)
 
             elif etype == "error":
-                error_info = response.get("error", {})
+                error_info = message.get("error", {})
                 logger.error(f"🔊 TTS Realtime error: {error_info}")
                 self._loop.call_soon_threadsafe(self._queue.put_nowait, None)
 
