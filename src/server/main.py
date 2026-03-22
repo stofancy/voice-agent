@@ -351,11 +351,17 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         logger.info("Client disconnected")
         await cancel_response(send_interrupt_event=False)
-        await websocket.close()
+        try:
+            await websocket.close()
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # WebSocket already closed
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
         await cancel_response(send_interrupt_event=False)
-        await websocket.close()
+        try:
+            await websocket.close()
+        except (WebSocketDisconnect, RuntimeError):
+            pass  # WebSocket already closed
 
 
 client_dir = Path(__file__).parent.parent / "client"
