@@ -8,9 +8,12 @@ providing low-latency voice response.
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
+
+if TYPE_CHECKING:
+    from turn_context import TurnContext
 
 
 @dataclass
@@ -59,11 +62,13 @@ class StreamingSynthesis:
         tts,  # BaseTTS
         websocket,  # WebSocketConnection
         config: SynthesisConfig = SynthesisConfig(),
+        turn_context: Optional["TurnContext"] = None,
     ):
         self._llm = llm
         self._tts = tts
         self._ws = websocket
         self._config = config
+        self._turn_context = turn_context
 
     async def run(self, transcript: str) -> SynthesisResult:
         """
@@ -114,6 +119,11 @@ class StreamingSynthesis:
 
             try:
                 async for audio_chunk in tts_stream:
+                    # Check for cancellation
+                    if self._turn_context is not None and self._turn_context.is_cancelled():
+                        logger.warning("🔊 TTS consume loop interrupted by cancellation")
+                        break
+
                     buffer.extend(audio_chunk)
 
                     if not first_chunk_received:
