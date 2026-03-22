@@ -299,111 +299,82 @@ async def websocket_endpoint(websocket: WebSocket):
                     last_perf_data = perf_data
                 return
 
-            # ── LLM + TTS stage (unified stream interface) ─────────
+            # ── LLM + TTS stage (parallel execution) ─────────
             full_response = ""
             tts_stream = tts.create_stream()
-
-            async for chunk in backend.chat_stream(transcript):
-                full_response += chunk
-                if perf_logger.is_enabled() and t_llm_first is None:
-                    t_llm_first = time.perf_counter()
-                    perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
-                if SUBTITLE_STREAMING:
-                    await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
-                # Feed LLM output to TTS in real-time
-                tts_stream.feed(chunk)
-
-            if perf_logger.is_enabled():
-                t_llm_end = time.perf_counter()
-                perf_data["llm_gen_ms"] = (t_llm_end - t_llm_first) * 1000
-
-            last_response = full_response
-            if not SUBTITLE_STREAMING:
-                await websocket.send_json({"type": "response_chunk", "text": full_response})
-
-            # Signal TTS that all text has been sent
-            tts_stream.finish()
-
             tts_started = True
             connection_state = "SPEAKING"
             await websocket.send_json({"type": "tts_start"})
 
-            # ── TTS audio output ────────────────────────────────────
-            if perf_logger.is_enabled():
-                t_tts_first = None
-                t_tts_end = None
+            async def llm_feed_loop():
+                """LLM 产生 token → feed 给 TTS → 发送字幕"""
+                nonlocal full_response
+                async for chunk in backend.chat_stream(transcript):
+                    full_response += chunk
+                    if perf_logger.is_enabled() and t_llm_first is None:
+                        t_llm_first = time.perf_counter()
+                        perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
+                    if SUBTITLE_STREAMING:
+                        await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
+                    tts_stream.feed(chunk)
+                tts_stream.finish()
+                if perf_logger.is_enabled():
+                    perf_data["llm_gen_ms"] = (time.perf_counter() - t_llm_first) * 1000
 
-            tts_start_time = asyncio.get_event_loop().time()
-            audio_chunks_sent = 0
-            audio_bytes_total = 0
-            buffer = bytearray()
-            first_chunk_received = False
-            buffer_start_time: Optional[float] = None
+            async def tts_consume_loop():
+                """TTS 音频边产生边发送"""
+                nonlocal audio_chunks_sent
+                buffer = bytearray()
+                first_chunk_received = False
+                buffer_start_time: Optional[float] = None
+                tts_start_time = asyncio.get_event_loop().time()
 
-            async for audio_chunk in tts_stream:
-                buffer.extend(audio_chunk)
-                audio_bytes_total += len(audio_chunk)
+                async for audio_chunk in tts_stream:
+                    buffer.extend(audio_chunk)
 
-                if not first_chunk_received:
-                    first_chunk_received = True
-                    buffer_start_time = asyncio.get_event_loop().time()
-                    if perf_logger.is_enabled() and t_tts_first is None:
-                        t_tts_first = time.perf_counter()
-                        perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
-                    logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
+                    if not first_chunk_received:
+                        first_chunk_received = True
+                        buffer_start_time = asyncio.get_event_loop().time()
+                        logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
 
-                current_time = asyncio.get_event_loop().time()
-                time_buffer_elapsed = (
-                    (current_time - buffer_start_time) if buffer_start_time is not None else 0
-                )
+                    current_time = asyncio.get_event_loop().time()
+                    time_buffer_elapsed = (
+                        (current_time - buffer_start_time) if buffer_start_time is not None else 0
+                    )
 
-                if (
-                    len(buffer) >= TTS_DATA_BUFFER_SIZE
-                    and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
-                ):
+                    if (
+                        len(buffer) >= TTS_DATA_BUFFER_SIZE
+                        and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
+                    ):
+                        audio_b64 = base64.b64encode(bytes(buffer)).decode()
+                        await websocket.send_json(
+                            {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
+                        )
+                        audio_chunks_sent += 1
+                        logger.debug(
+                            "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms",
+                            audio_chunks_sent,
+                            len(buffer),
+                            (current_time - tts_start_time) * 1000,
+                        )
+                        buffer = bytearray()
+                        buffer_start_time = asyncio.get_event_loop().time()
+
+                if buffer:
                     audio_b64 = base64.b64encode(bytes(buffer)).decode()
                     await websocket.send_json(
-                        {
-                            "type": "audio_chunk",
-                            "data": audio_b64,
-                            "sample_rate": TTS_SAMPLE_RATE,
-                        }
+                        {"type": "audio_chunk", "data": audio_b64, "sample_rate": TTS_SAMPLE_RATE}
                     )
                     audio_chunks_sent += 1
-                    chunk_time = asyncio.get_event_loop().time()
-                    logger.debug(
-                        "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms (buffer {:.1f}ms)",
-                        audio_chunks_sent,
-                        len(buffer),
-                        (chunk_time - tts_start_time) * 1000,
-                        time_buffer_elapsed * 1000,
-                    )
-                    buffer = bytearray()
-                    buffer_start_time = asyncio.get_event_loop().time()
 
-            if buffer:
-                audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                await websocket.send_json(
-                    {
-                        "type": "audio_chunk",
-                        "data": audio_b64,
-                        "sample_rate": TTS_SAMPLE_RATE,
-                    }
-                )
-                audio_chunks_sent += 1
-
-            if perf_logger.is_enabled():
-                t_tts_end = time.perf_counter()
-                perf_data["tts_total_ms"] = (t_tts_end - t_llm_end) * 1000
+            # 并行执行 LLM feed 和 TTS consume
+            tts_start_time = asyncio.get_event_loop().time()
+            audio_chunks_sent = 0
+            await asyncio.gather(llm_feed_loop(), tts_consume_loop())
 
             tts_total_time = asyncio.get_event_loop().time() - tts_start_time
-            logger.info(
-                "🔊 TTS complete: {} chunks, total {:.1f}ms",
-                audio_chunks_sent,
-                tts_total_time * 1000,
-            )
+            logger.info("🔊 TTS complete: {} chunks, total {:.1f}ms", audio_chunks_sent, tts_total_time * 1000)
 
-            # Store perf data for the outer scope to pick up
             if perf_logger.is_enabled():
                 last_perf_data = perf_data
 
@@ -516,48 +487,6 @@ if client_dir.exists():
     v2_dir = client_dir / "v2"
     if v2_dir.exists():
         app.mount("/v2", StaticFiles(directory=str(v2_dir), html=True), name="v2-static")
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
-
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-                            })
-                
-                audio_buffer = []
-                await websocket.send_json({"type": "listening_stopped"})
-                logger.debug("Stopped listening")
-                
-            elif msg["type"] == "audio" and is_listening:
-                # Decode base64 audio
-                audio_bytes = base64.b64decode(msg["data"])
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                audio_buffer.append(audio_np)
-                logger.debug(f"📥 Audio chunk: {len(audio_np)} samples, buffer now: {len(audio_buffer)} chunks, total: {sum(len(c) for c in audio_buffer)} samples")
-                
-                # VAD check - notify client if speech detected
-                if vad and len(audio_np) > 0:
-                    has_speech = vad.is_speech(audio_np)
-                    await websocket.send_json({
-                        "type": "vad_status",
-                        "speech_detected": has_speech,
-                    })
-                
-            elif msg["type"] == "ping":
-                await websocket.send_json({"type": "pong"})
-                
-    except WebSocketDisconnect:
-        logger.info("Client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close()
-
 
 # Serve static files for client
 client_dir = Path(__file__).parent.parent / "client"
@@ -567,22 +496,7 @@ if client_dir.exists():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-ue,
-    )
-es for client
-client_dir = Path(__file__).parent.parent / "client"
-if client_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
 
-
-if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(
         "src.server.main:app",
         host=settings.host,
