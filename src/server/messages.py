@@ -53,7 +53,7 @@ class AudioMessage(WSMessage):
         import base64
         audio_b64 = data.get("data", "")
         audio_bytes = base64.b64decode(audio_b64)
-        return cls(audio_data=audio_bytes)
+        return cls(type=MessageType.AUDIO, data=data, audio_data=audio_bytes)
 
 
 @dataclass
@@ -78,7 +78,7 @@ class PerfReportMessage(WSMessage):
     @classmethod
     def from_dict(cls, data: dict) -> "PerfReportMessage":
         """Create from dict with 'metrics' key."""
-        return cls(metrics=data.get("metrics", {}))
+        return cls(type=MessageType.PERF_REPORT, data=data, metrics=data.get("metrics", {}))
 
 
 @dataclass
