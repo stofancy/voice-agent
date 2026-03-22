@@ -327,6 +327,8 @@ async def websocket_endpoint(websocket: WebSocket):
             async def tts_consume_loop():
                 """TTS 音频边产生边发送"""
                 nonlocal audio_chunks_sent
+                # 确保 TTS stream 已初始化（feed 会触发懒连接）
+                tts_stream._ensure_connected()
                 buffer = bytearray()
                 first_chunk_received = False
                 buffer_start_time: Optional[float] = None
