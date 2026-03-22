@@ -308,7 +308,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
             async def llm_feed_loop():
                 """LLM 产生 token → feed 给 TTS → 发送字幕"""
-                nonlocal full_response
+                nonlocal full_response, t_llm_first
+                t_llm_first = None  # 避免 UnboundLocalError
                 try:
                     async for chunk in backend.chat_stream(transcript):
                         full_response += chunk
@@ -320,7 +321,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         tts_stream.feed(chunk)
                 finally:
                     tts_stream.finish()  # 保证 finish() 被调用
-                if perf_logger.is_enabled():
+                if perf_logger.is_enabled() and t_llm_first is not None:
                     perf_data["llm_gen_ms"] = (time.perf_counter() - t_llm_first) * 1000
 
             async def tts_consume_loop():
