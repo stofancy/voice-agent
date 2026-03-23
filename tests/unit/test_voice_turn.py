@@ -505,3 +505,92 @@ async def test_vt_execute_handles_cancelled_error():
     # Verify we can transition to IDLE (simulating what interrupt would do)
     turn._state.transition_to(ConnectionState.IDLE)
     assert turn._state.is_idle()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TurnContext Population Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_vt_execute_populates_turn_context_transcript():
+    """VoiceTurn.execute() writes transcript to turn_context."""
+    tc = TurnContext()
+    turn = VoiceTurn(
+        stt=MockSTT(transcript="hello world", success=True),
+        llm=MockLLM(tokens=["Hi", "!"]),
+        tts=MockTTS(MockTTSStream()),
+        websocket=MockWS(),
+        config=SynthesisConfig(data_buffer_size=1),
+        turn_context=tc,
+    )
+
+    audio = np.zeros(16000, dtype=np.float32)
+    await turn.execute(audio)
+
+    assert tc.transcript == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_vt_execute_populates_turn_context_full_response():
+    """VoiceTurn.execute() writes full_response to turn_context."""
+    tc = TurnContext()
+    turn = VoiceTurn(
+        stt=MockSTT(transcript="hello", success=True),
+        llm=MockLLM(tokens=["Hi", " ", "there"]),
+        tts=MockTTS(MockTTSStream()),
+        websocket=MockWS(),
+        config=SynthesisConfig(data_buffer_size=1),
+        turn_context=tc,
+    )
+
+    audio = np.zeros(16000, dtype=np.float32)
+    await turn.execute(audio)
+
+    assert tc.full_response == "Hi there"
+
+
+@pytest.mark.asyncio
+async def test_vt_execute_populates_turn_context_perf_data():
+    """VoiceTurn.execute() writes perf_data to turn_context."""
+    tc = TurnContext()
+    turn = VoiceTurn(
+        stt=MockSTT(transcript="hello", success=True),
+        llm=MockLLM(tokens=["Hi"]),
+        tts=MockTTS(MockTTSStream()),
+        websocket=MockWS(),
+        config=SynthesisConfig(data_buffer_size=1),
+        turn_context=tc,
+    )
+
+    audio = np.zeros(16000, dtype=np.float32)
+    await turn.execute(audio)
+
+    assert "llm_ttft_ms" in tc.perf_data
+    assert "llm_gen_ms" in tc.perf_data
+    assert "tts_ttfa_ms" in tc.perf_data
+    assert "tts_total_ms" in tc.perf_data
+    assert "audio_chunks_sent" in tc.perf_data
+    assert tc.perf_data["llm_ttft_ms"] is not None
+    assert tc.perf_data["llm_ttft_ms"] >= 0
+
+
+@pytest.mark.asyncio
+async def test_vt_execute_empty_transcript_clears_context():
+    """Empty transcript resets turn_context.transcript to empty."""
+    tc = TurnContext()
+    tc.transcript = "old value"
+    turn = VoiceTurn(
+        stt=MockSTT(transcript="", success=True),
+        llm=MockLLM(),
+        tts=MockTTS(),
+        websocket=MockWS(),
+        config=SynthesisConfig(),
+        turn_context=tc,
+    )
+
+    audio = np.zeros(16000, dtype=np.float32)
+    await turn.execute(audio)
+
+    assert tc.transcript == ""
+    assert tc.full_response == ""
