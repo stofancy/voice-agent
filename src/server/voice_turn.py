@@ -83,6 +83,7 @@ class VoiceTurn:
         try:
             # STT stage
             transcript, success = await self._stt.transcribe(audio_data)
+            self._turn_context.transcript = transcript
             await self._ws.send_transcript(transcript)
             logger.info(f"🎤 Transcript: {transcript}")
 
@@ -107,6 +108,14 @@ class VoiceTurn:
             try:
                 result = await synthesis.run(transcript)
                 full_response = result.full_response
+                self._turn_context.full_response = full_response
+                self._turn_context.perf_data = {
+                    "llm_ttft_ms": result.metrics.llm_ttft_ms,
+                    "llm_gen_ms": result.metrics.llm_gen_ms,
+                    "tts_ttfa_ms": result.metrics.tts_ttfa_ms,
+                    "tts_total_ms": result.metrics.tts_total_ms,
+                    "audio_chunks_sent": result.metrics.audio_chunks_sent,
+                }
 
                 await self._ws.send_tts_end(interrupted=False)
                 await self._ws.send_response_complete(full_response)
