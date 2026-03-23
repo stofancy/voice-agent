@@ -199,9 +199,6 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
 
     session = WebSocketSession(websocket)
-    last_perf_data: dict = {}
-    last_transcript: str = ""
-    last_response: str = ""
 
     try:
         async for raw in _message_stream(websocket):
@@ -240,22 +237,20 @@ async def websocket_endpoint(websocket: WebSocket):
                     session=session,
                     message=message,
                     perf_logger=perf_logger,
-                    last_transcript=last_transcript,
-                    last_response=last_response,
-                    last_perf_data=last_perf_data,
+                    last_transcript=session.turn_context.transcript,
+                    last_response=session.turn_context.full_response,
+                    last_perf_data=session.turn_context.perf_data,
                     settings=settings,
                     backend=backend,
                 )
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
-        await session.cancel_response(send_interrupt_event=False)
-        _close_websocket(websocket)
-
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
+    finally:
         await session.cancel_response(send_interrupt_event=False)
-        _close_websocket(websocket)
+        await _close_websocket(websocket)
 
 
 async def _message_stream(websocket: WebSocket):
@@ -264,10 +259,10 @@ async def _message_stream(websocket: WebSocket):
         yield await websocket.receive_text()
 
 
-def _close_websocket(websocket: WebSocket) -> None:
+async def _close_websocket(websocket: WebSocket) -> None:
     """Close WebSocket, ignoring already-closed errors."""
     try:
-        websocket.close()
+        await websocket.close()
     except (WebSocketDisconnect, RuntimeError):
         pass  # WebSocket already closed
 
