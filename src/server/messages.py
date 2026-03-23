@@ -12,18 +12,21 @@ from typing import Optional, Any
 
 class MessageType(str, Enum):
     """All possible WebSocket message types."""
+
     START_LISTENING = "start_listening"
     STOP_LISTENING = "stop_listening"
     AUDIO = "audio"
     INTERRUPT = "interrupt"
     PING = "ping"
     PERF_REPORT = "perf_report"
+    CLIENT_LOG = "client_log"
     UNKNOWN = "unknown"
 
 
 @dataclass
 class WSMessage:
     """Base WebSocket message."""
+
     type: MessageType
     data: dict[str, Any]
 
@@ -31,6 +34,7 @@ class WSMessage:
 @dataclass
 class StartListeningMessage(WSMessage):
     """start_listening message - begins recording."""
+
     def __init__(self):
         super().__init__(type=MessageType.START_LISTENING, data={})
 
@@ -38,6 +42,7 @@ class StartListeningMessage(WSMessage):
 @dataclass
 class StopListeningMessage(WSMessage):
     """stop_listening message - ends recording and triggers STT."""
+
     def __init__(self):
         super().__init__(type=MessageType.STOP_LISTENING, data={})
 
@@ -45,12 +50,14 @@ class StopListeningMessage(WSMessage):
 @dataclass
 class AudioMessage(WSMessage):
     """audio message - contains base64 encoded audio data."""
+
     audio_data: bytes
 
     @classmethod
     def from_dict(cls, data: dict) -> "AudioMessage":
         """Create from dict with 'data' key containing base64 string."""
         import base64
+
         audio_b64 = data.get("data", "")
         audio_bytes = base64.b64decode(audio_b64)
         return cls(type=MessageType.AUDIO, data=data, audio_data=audio_bytes)
@@ -59,6 +66,7 @@ class AudioMessage(WSMessage):
 @dataclass
 class InterruptMessage(WSMessage):
     """interrupt message - cancels current response."""
+
     def __init__(self):
         super().__init__(type=MessageType.INTERRUPT, data={})
 
@@ -66,6 +74,7 @@ class InterruptMessage(WSMessage):
 @dataclass
 class PingMessage(WSMessage):
     """ping message - heartbeat."""
+
     def __init__(self):
         super().__init__(type=MessageType.PING, data={})
 
@@ -73,6 +82,7 @@ class PingMessage(WSMessage):
 @dataclass
 class PerfReportMessage(WSMessage):
     """perf_report message - client-side performance metrics."""
+
     metrics: dict
 
     @classmethod
@@ -84,6 +94,7 @@ class PerfReportMessage(WSMessage):
 @dataclass
 class UnknownMessage(WSMessage):
     """Unknown message type - fallback."""
+
     raw_type: str
 
     @classmethod
@@ -102,6 +113,7 @@ def parse_message(raw: str) -> WSMessage:
         Typed message subclass instance
     """
     import json
+
     msg = json.loads(raw)
     msg_type = msg.get("type", "")
     msg_data = msg.get("data", {})

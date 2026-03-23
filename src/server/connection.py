@@ -8,6 +8,7 @@ Provides:
 """
 
 from enum import Enum
+from loguru import logger
 from typing import Optional, Any
 
 from fastapi import WebSocket
@@ -15,6 +16,7 @@ from fastapi import WebSocket
 
 class ConnectionState(str, Enum):
     """Connection states for the voice turn state machine."""
+
     IDLE = "IDLE"
     LISTENING = "LISTENING"
     PROCESSING = "PROCESSING"
@@ -69,7 +71,14 @@ class WebSocketConnection:
 
     async def send_json(self, data: dict) -> None:
         """Send JSON message."""
+        import datetime
+
+        now = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+        logger.info(
+            f"📤 [{now}] WebSocket send_json: type={data.get('type')}, state={self._ws.client_state}"
+        )
         await self._ws.send_json(data)
+        logger.info(f"📤 [{now}] WebSocket send_json done: type={data.get('type')}")
 
     async def send_listening_started(self) -> None:
         """Send listening_started message."""
@@ -90,8 +99,13 @@ class WebSocketConnection:
     async def send_audio_chunk(self, data: bytes, sample_rate: int) -> None:
         """Send audio_chunk message with base64 encoded audio."""
         import base64
+
         audio_b64 = base64.b64encode(data).decode()
+        logger.info(
+            f"📤 WebSocket sending audio_chunk: {len(data)} bytes, sample_rate={sample_rate}"
+        )
         await self.send_json({"type": "audio_chunk", "data": audio_b64, "sample_rate": sample_rate})
+        logger.info(f"📤 WebSocket sent audio_chunk successfully")
 
     async def send_tts_end(self, interrupted: bool = False) -> None:
         """Send tts_end message."""

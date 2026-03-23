@@ -521,7 +521,7 @@ async def test_vt_execute_populates_turn_context_transcript():
         llm=MockLLM(tokens=["Hi", "!"]),
         tts=MockTTS(MockTTSStream()),
         websocket=MockWS(),
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
         turn_context=tc,
     )
 
@@ -540,7 +540,7 @@ async def test_vt_execute_populates_turn_context_full_response():
         llm=MockLLM(tokens=["Hi", " ", "there"]),
         tts=MockTTS(MockTTSStream()),
         websocket=MockWS(),
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
         turn_context=tc,
     )
 
@@ -559,7 +559,7 @@ async def test_vt_execute_populates_turn_context_perf_data():
         llm=MockLLM(tokens=["Hi"]),
         tts=MockTTS(MockTTSStream()),
         websocket=MockWS(),
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
         turn_context=tc,
     )
 
