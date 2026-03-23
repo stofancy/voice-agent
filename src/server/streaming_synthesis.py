@@ -82,7 +82,7 @@ class StreamingSynthesis:
             SynthesisResult with full response and metrics
         """
         full_response = ""
-        tts_stream = self._tts.create_stream()
+        tts_stream_holder = [self._tts.create_stream()]
 
         # Metrics tracking
         metrics = SynthesisMetrics()
@@ -93,62 +93,70 @@ class StreamingSynthesis:
         tts_start_time = asyncio.get_running_loop().time()
         audio_chunks_sent = 0
 
+        SENTENCE_ENDINGS = set('。！？；：""（）.,!?;:"\'()')
+
         async def llm_feed_loop():
-            """LLM produces tokens → feed to TTS → send subtitles."""
+            """LLM produces tokens → buffer by sentence → feed to TTS."""
             nonlocal full_response, t_llm_first, t_llm_end
             import datetime
 
-            tts_finished = False
-            last_chunk_time = asyncio.get_running_loop().time()
+            sentence_buffer = ""
+            need_new_stream = False
             try:
                 async for chunk in self._llm.chat_stream(transcript):
                     now = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
 
-                    current_time = asyncio.get_running_loop().time()
-                    time_since_last_chunk = current_time - last_chunk_time
-
-                    if time_since_last_chunk > 5.0 and not tts_finished:
-                        logger.info(
-                            f"[{now}] 🔊 LLM pause detected ({time_since_last_chunk:.1f}s), finishing TTS stream"
-                        )
-                        tts_stream.finish()
-                        tts_finished = True
-
-                    last_chunk_time = current_time
-
-                    logger.info(
-                        f"[{now}] 🤖 LLM chunk received: {chunk!r}, full_response so far: {full_response!r}"
-                    )
+                    logger.info(f"[{now}] 🤖 LLM chunk received: {chunk!r}")
                     if chunk == "[TOOL_CALL]":
-                        logger.info(f"[{now}] 🔊 Tool call detected, finishing TTS stream")
-                        tts_stream.finish()
-                        tts_finished = True
+                        logger.info(f"[{now}] 🔊 Tool call detected, finishing current sentence")
+                        if sentence_buffer:
+                            tts_stream_holder[0].feed(sentence_buffer)
+                            sentence_buffer = ""
+                        tts_stream_holder[0].finish()
+                        need_new_stream = True
                         continue
                     full_response += chunk
                     if t_llm_first is None:
                         t_llm_first = time.perf_counter()
                     if self._config.subtitle_streaming:
                         await self._ws.send_subtitle_chunk(chunk)
-                    tts_stream.feed(chunk)
+
+                    if need_new_stream:
+                        tts_stream_holder[0] = tts_factory.create_stream()
+                        tts_stream_holder[0]._ensure_connected()
+                        need_new_stream = False
+
+                    sentence_buffer += chunk
+
+                    if chunk in SENTENCE_ENDINGS:
+                        tts_stream_holder[0].feed(sentence_buffer)
+                        sentence_buffer = ""
+                        logger.info(f"[{now}] 🔊 Sentence end detected, finishing TTS stream")
+                        tts_stream_holder[0].finish()
+                        need_new_stream = True
+
+                if sentence_buffer:
+                    tts_stream_holder[0].feed(sentence_buffer)
+                    sentence_buffer = ""
             finally:
-                now = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                logger.info(f"[{now}] 🔊 LLM feed loop ending, calling finish()")
-                if not tts_finished:
-                    tts_stream.finish()
+                if sentence_buffer:
+                    tts_stream_holder[0].feed(sentence_buffer)
+                    sentence_buffer = ""
+                tts_stream_holder[0].finish()
                 t_llm_end = time.perf_counter()
 
         async def tts_consume_loop():
             """TTS audio streaming → buffering → send to client."""
             nonlocal t_tts_first, t_llm_end, audio_chunks_sent, tts_start_time
             logger.info("🔊 TTS consume loop started")
-            tts_stream._ensure_connected()
+            tts_stream_holder[0]._ensure_connected()
             logger.info("🔊 TTS stream ensured connected")
 
             buffer = bytearray()
             first_chunk_received = False
 
             try:
-                async for audio_chunk in tts_stream:
+                async for audio_chunk in tts_stream_holder[0]:
                     import datetime
 
                     now = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
@@ -177,9 +185,6 @@ class StreamingSynthesis:
 
             except asyncio.CancelledError:
                 logger.warning("🔊 TTS consume loop cancelled")
-                raise
-            except Exception as e:
-                logger.error(f"🔊 TTS consume loop error: {e}")
                 raise
             except Exception as e:
                 logger.error(f"🔊 TTS consume loop error: {e}")

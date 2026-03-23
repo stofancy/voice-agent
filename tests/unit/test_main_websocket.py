@@ -817,8 +817,8 @@ async def test_pipeline_001_both_loops_complete_normally(mock_settings):
 async def test_pipeline_006_tts_stream_feed_called_for_each_llm_chunk(mock_settings):
     """PIPELINE-006: feed调用次数
 
-    条件: LLM yield 3个chunk
-    预期: tts_stream.feed() 被调用 3 次
+    条件: LLM yield 3个chunk (无标点)
+    预期: tts_stream.feed() 被调用 1 次 (所有chunk缓冲后一起发送)
     """
     mock_stt = MagicMock()
     mock_stt.transcribe = AsyncMock(return_value=("Hello", True))
@@ -861,8 +861,8 @@ async def test_pipeline_006_tts_stream_feed_called_for_each_llm_chunk(mock_setti
 
         await main.websocket_endpoint(mock_ws)
 
-        # feed 应该被调用 3 次
-        assert mock_tts_stream.feed_call_count == 3
+        # feed 应该被调用 1 次 (无标点，所有chunk缓冲后一起发送)
+        assert mock_tts_stream.feed_call_count == 1
         assert mock_tts_stream.finish_called is True
 
 
