@@ -201,7 +201,7 @@ async def test_llm_tokens_are_fed_to_tts_stream():
     )
     await synthesis.run("hello")
 
-    assert tts_stream.feed_calls == ["Hi", "!"]
+    assert tts_stream.feed_calls == ["Hi!"]  # Sent when sentence-ending punctuation received
     assert tts_stream.finish_called
 
 
