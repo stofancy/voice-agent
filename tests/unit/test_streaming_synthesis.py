@@ -178,7 +178,7 @@ async def test_llm_tokens_are_joined_into_full_response():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 
@@ -197,7 +197,7 @@ async def test_llm_tokens_are_fed_to_tts_stream():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     await synthesis.run("hello")
 
@@ -217,7 +217,7 @@ async def test_subtitle_chunks_sent_when_streaming_enabled():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1, subtitle_streaming=True),
+        config=SynthesisConfig(subtitle_streaming=True),
     )
     await synthesis.run("hello")
 
@@ -239,7 +239,7 @@ async def test_subtitle_chunks_skipped_when_streaming_disabled():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1, subtitle_streaming=False),
+        config=SynthesisConfig(subtitle_streaming=False),
     )
     await synthesis.run("hello")
 
@@ -259,7 +259,7 @@ async def test_tts_stream_finish_called_even_on_llm_error():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     with pytest.raises(RuntimeError, match="LLM error"):
         await synthesis.run("hello")
@@ -276,10 +276,7 @@ async def test_audio_chunks_sent_when_buffer_size_reached():
     tts = MockTTS(tts_stream)
     ws = MockWS()
 
-    config = SynthesisConfig(
-        data_buffer_size=800,  # Send when buffer >= 800 bytes
-        time_buffer_seconds=0.0,  # No time delay
-    )
+    config = SynthesisConfig()
     synthesis = StreamingSynthesis(llm=llm, tts=tts, websocket=ws, config=config)
     result = await synthesis.run("hello")
 
@@ -299,7 +296,7 @@ async def test_llm_ttft_metric_is_positive():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 
@@ -319,7 +316,7 @@ async def test_llm_gen_metric_is_positive():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 
@@ -339,7 +336,7 @@ async def test_llm_ttft_none_when_no_tokens():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 
@@ -359,7 +356,7 @@ async def test_tts_total_ms_is_positive():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 
@@ -379,7 +376,7 @@ async def test_ensure_connected_called_before_consuming():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     await synthesis.run("hello")
 
@@ -398,7 +395,7 @@ async def test_empty_llm_response():
         llm=llm,
         tts=tts,
         websocket=ws,
-        config=SynthesisConfig(data_buffer_size=1),
+        config=SynthesisConfig(),
     )
     result = await synthesis.run("hello")
 

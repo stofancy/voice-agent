@@ -33,8 +33,6 @@ async def handle_stop_listening(
     stt: "BaseSTT",
     backend: "BaseLLM",
     tts: "BaseTTS",
-    TTS_DATA_BUFFER_SIZE: int,
-    TTS_TIME_BUFFER_SECONDS: float,
     TTS_SAMPLE_RATE: int,
     SUBTITLE_STREAMING: bool,
 ) -> Optional[asyncio.Task]:
@@ -60,8 +58,6 @@ async def handle_stop_listening(
         tts=tts,
         websocket=WebSocketConnection(session.websocket),
         config=SynthesisConfig(
-            data_buffer_size=TTS_DATA_BUFFER_SIZE,
-            time_buffer_seconds=TTS_TIME_BUFFER_SECONDS,
             sample_rate=TTS_SAMPLE_RATE,
             subtitle_streaming=SUBTITLE_STREAMING,
         ),
@@ -134,3 +130,11 @@ async def handle_perf_report(
             backend_data=last_perf_data,
             context=context,
         )
+
+
+async def handle_client_log(
+    session: WebSocketSession,
+    message: dict,
+) -> None:
+    """Handle client_log: logs messages from frontend."""
+    logger.info(f"📱 Frontend log: {message.get('message', '')}")

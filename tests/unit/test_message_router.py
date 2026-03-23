@@ -126,8 +126,6 @@ async def test_handle_stop_listening_not_listening_returns_none():
         stt=MagicMock(),
         backend=MagicMock(),
         tts=MagicMock(),
-        TTS_DATA_BUFFER_SIZE=8192,
-        TTS_TIME_BUFFER_SECONDS=0.1,
         TTS_SAMPLE_RATE=24000,
         SUBTITLE_STREAMING=True,
     )
@@ -147,8 +145,6 @@ async def test_handle_stop_listening_not_listening_sends_stopped():
         stt=MagicMock(),
         backend=MagicMock(),
         tts=MagicMock(),
-        TTS_DATA_BUFFER_SIZE=8192,
-        TTS_TIME_BUFFER_SECONDS=0.1,
         TTS_SAMPLE_RATE=24000,
         SUBTITLE_STREAMING=True,
     )
@@ -171,8 +167,6 @@ async def test_handle_stop_listening_empty_buffer_returns_none():
         stt=MagicMock(),
         backend=MagicMock(),
         tts=MagicMock(),
-        TTS_DATA_BUFFER_SIZE=8192,
-        TTS_TIME_BUFFER_SECONDS=0.1,
         TTS_SAMPLE_RATE=24000,
         SUBTITLE_STREAMING=True,
     )

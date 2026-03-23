@@ -81,6 +81,35 @@
         }
     };
 
+    UIController.prototype.showLoadingIndicator = function (text) {
+        if (!this._loadingEl) {
+            this._loadingEl = document.createElement('div');
+            this._loadingEl.className = 'loading-indicator';
+            this._loadingEl.innerHTML = '<span class="loading-bracket">[</span><span class="loading-spinner">...</span><span class="loading-bracket">]</span> <span class="loading-text"></span>';
+            this.messagesContainer.appendChild(this._loadingEl);
+        }
+        this._updateLoadingIndicator(text);
+        this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        return this._loadingEl;
+    };
+
+    UIController.prototype.updateLoadingIndicator = function (text) {
+        if (this._loadingEl) {
+            const textEl = this._loadingEl.querySelector('.loading-text');
+            if (textEl) {
+                textEl.textContent = text;
+            }
+            this.messagesContainer.scrollTop = this.messagesContainer.scrollHeight;
+        }
+    };
+
+    UIController.prototype.hideLoadingIndicator = function () {
+        if (this._loadingEl) {
+            this._loadingEl.remove();
+            this._loadingEl = null;
+        }
+    };
+
     UIController.prototype.clearMessages = function () {
         this.messagesContainer.innerHTML = '';
     };

@@ -37,13 +37,12 @@ from .message_router import (
     handle_audio,
     handle_ping,
     handle_perf_report,
+    handle_client_log,
 )
 
 
 TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
 SUBTITLE_STREAMING = os.getenv("OPENCLAW_SUBTITLE_STREAMING", "true").lower() == "true"
-TTS_DATA_BUFFER_SIZE = int(os.getenv("OPENCLAW_TTS_DATA_BUFFER_SIZE", "8192"))
-TTS_TIME_BUFFER_SECONDS = float(os.getenv("OPENCLAW_TTS_TIME_BUFFER_SECONDS", "0.1"))
 TTS_SAMPLE_RATE = int(os.getenv("OPENCLAW_TTS_SAMPLE_RATE", "24000"))
 
 
@@ -96,9 +95,7 @@ async def lifespan(app: FastAPI):
 
     # Startup
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
-    logger.info(
-        f"TTS config: DATA_BUFFER={TTS_DATA_BUFFER_SIZE} bytes, TIME_BUFFER={TTS_TIME_BUFFER_SECONDS}s, STREAMING={TTS_STREAMING}"
-    )
+    logger.info(f"TTS config: STREAMING={TTS_STREAMING}")
 
     load_keys_from_env()
     if settings.require_auth:
@@ -215,8 +212,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     stt=stt,
                     backend=backend,
                     tts=tts,
-                    TTS_DATA_BUFFER_SIZE=TTS_DATA_BUFFER_SIZE,
-                    TTS_TIME_BUFFER_SECONDS=TTS_TIME_BUFFER_SECONDS,
                     TTS_SAMPLE_RATE=TTS_SAMPLE_RATE,
                     SUBTITLE_STREAMING=SUBTITLE_STREAMING,
                 )
@@ -243,6 +238,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     settings=settings,
                     backend=backend,
                 )
+
+            elif msg_type == "client_log":
+                await handle_client_log(session=session, message=message)
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
