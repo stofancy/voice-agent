@@ -15,10 +15,12 @@ from .events import (
     AgentStartEvent,
     AgentCompleteEvent,
 )
+from .langchain_agent import LangChainAgent
 
 try:
     from .stream_controller import StreamController
     from .llm_factory import LangChainLLMWrapper, create_langchain_llm
+    from .factory import create_query_agent, create_booking_agent, create_default_agent
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -26,6 +28,10 @@ except ImportError:
     StreamController = None
     LangChainLLMWrapper = None
     create_langchain_llm = None
+    create_query_agent = None
+    create_booking_agent = None
+    create_default_agent = None
+    LangChainAgent = None
 
 __all__ = [
     "BaseAgent",
@@ -41,5 +47,9 @@ __all__ = [
     "StreamController",
     "LangChainLLMWrapper",
     "create_langchain_llm",
+    "LangChainAgent",
+    "create_query_agent",
+    "create_booking_agent",
+    "create_default_agent",
     "LANGCHAIN_AVAILABLE",
 ]

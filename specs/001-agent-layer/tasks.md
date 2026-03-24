@@ -50,7 +50,7 @@
 - [x] T012 [US1] Create `src/server/agent/langchain_agent.py` wrapping LangChain agent with astream_events()
 - [x] T013 [US1] Integrate StreamController callback → TTS text emission in langchain_agent.py
 - [ ] T014 [US1] Modify `src/server/voice_turn.py` to use LangChainAgent instead of OpenAILLM.chat_stream()
-- [ ] T015 [US1] Add WebSocket event emission for tool lifecycle (tool_start, tool_complete)
+- [x] T015 [US1] Add WebSocket event emission for tool lifecycle (tool_start, tool_complete)
 - [ ] T016 [US1] Test: verify TTS emits text during dummy tool execution
 
 **Checkpoint**: User Story 1 should be fully functional
