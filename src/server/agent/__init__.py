@@ -15,8 +15,17 @@ from .events import (
     AgentStartEvent,
     AgentCompleteEvent,
 )
-from .stream_controller import StreamController
-from .llm_factory import LangChainLLMWrapper, create_langchain_llm
+
+try:
+    from .stream_controller import StreamController
+    from .llm_factory import LangChainLLMWrapper, create_langchain_llm
+
+    LANGCHAIN_AVAILABLE = True
+except ImportError:
+    LANGCHAIN_AVAILABLE = False
+    StreamController = None
+    LangChainLLMWrapper = None
+    create_langchain_llm = None
 
 __all__ = [
     "BaseAgent",
@@ -32,4 +41,5 @@ __all__ = [
     "StreamController",
     "LangChainLLMWrapper",
     "create_langchain_llm",
+    "LANGCHAIN_AVAILABLE",
 ]
