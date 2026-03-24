@@ -19,6 +19,7 @@
     let isAiSpeaking = false;
     let ttsEndReceived = false;
     let touchHandled = false;
+    let toolCallActive = false;  // Whether a tool call is in progress
     let continuousMode = false;  // Continuous conversation mode
     let autoRestartListening = false;  // Auto-restart after AI finishes speaking
 
@@ -76,6 +77,7 @@
         talkButton.setSpeaking(false);
         interruptButton && interruptButton.setVisible(false);
         ui.setUserSpeaking(false);
+        ui.hideLoadingIndicator();
     }
 
     function connect() {
@@ -212,13 +214,17 @@
                 assistantStreamingMessageEl = null;
                 break;
             case 'subtitle_chunk':
-                assistantStreamingText += msg.text || '';
                 if (!assistantStreamingMessageEl) {
                     assistantStreamingMessageEl = ui.appendMessage('assistant', '');
                 }
+                if (!ui._loadingEl) {
+                    ui.showLoadingIndicator('正在思考...');
+                }
+                assistantStreamingText += msg.text || '';
                 ui.updateStreamingAssistantText(assistantStreamingMessageEl, assistantStreamingText);
                 break;
             case 'audio_chunk':
+                send({ type: 'client_log', message: 'audio_chunk received: ' + (msg.data ? msg.data.length : 0) + ' bytes' });
                 player.enqueue(msg.data, msg.sample_rate);
                 break;
             case 'tts_start':
@@ -226,13 +232,19 @@
                 setAiSpeaking(true);
                 break;
             case 'tts_end':
-                // Don't immediately stop speaking — wait for audio queue to drain
                 ttsEndReceived = true;
                 if (!player.isPlaying) {
                     finishSpeaking();
                 }
                 break;
+            case 'tool_call':
+                ui.showLoadingIndicator(`正在调用工具: ${msg.tool_name}`);
+                break;
+            case 'tool_call_end':
+                ui.updateLoadingIndicator(`工具执行中...`);
+                break;
             case 'response_complete':
+                ui.hideLoadingIndicator();
                 if (assistantStreamingMessageEl) {
                     ui.updateStreamingAssistantText(assistantStreamingMessageEl, msg.text || assistantStreamingText);
                 } else {
@@ -241,13 +253,13 @@
                 break;
             case 'interrupt_complete':
                 ttsEndReceived = false;
+                ui.hideLoadingIndicator();
                 player.stop();
                 setAiSpeaking(false);
                 break;
             case 'listening_started':
                 break;
             case 'listening_stopped':
-                // Turn is fully done — ensure clean state
                 if (!isAiSpeaking && !player.isPlaying) {
                     ttsEndReceived = false;
                 }

@@ -81,21 +81,24 @@ class OpenAILLM(BaseLLM):
             )
             logger.info(f"✅ LLM stream started")
             async for chunk in stream:
+                if (
+                    hasattr(chunk.choices[0].delta, "tool_calls")
+                    and chunk.choices[0].delta.tool_calls
+                ):
+                    yield "[TOOL_CALL]"
                 if chunk.choices[0].delta.content:
                     text = chunk.choices[0].delta.content
                     full_response += text
                     yield text
 
-            self.conversation_history.append(
-                {"role": "assistant", "content": full_response}
-            )
+            self.conversation_history.append({"role": "assistant", "content": full_response})
             logger.info(f"✅ LLM stream complete, response length={len(full_response)}")
         except Exception as e:
             logger.error(f"❌ LLM streaming error: {type(e).__name__}: {e}")
             logger.error(f"   URL: {self.url}/v1/chat/completions")
             logger.error(f"   Model: {self.model}")
             # Try to extract more details from the error
-            if hasattr(e, 'response') and e.response is not None:
+            if hasattr(e, "response") and e.response is not None:
                 try:
                     error_data = e.response.json()
                     logger.error(f"   Response: {error_data}")

@@ -22,6 +22,15 @@ class TTSStream(ABC):
             send_to_client(audio)
     """
 
+    def _ensure_connected(self) -> None:
+        """
+        懒连接：确保 TTS 连接已建立。
+
+        对于需要提前建立连接的 TTS 实现（如 WebSocket），
+        可覆盖此方法。否则默认空实现（HTTP SSE 等按需连接）。
+        """
+        pass
+
     @abstractmethod
     def feed(self, text: str) -> None:
         """喂入一段文本（LLM 每产出一个 chunk 调用一次）"""
