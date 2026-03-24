@@ -21,10 +21,8 @@
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Status**: TODO - Next to implement  
+**Status**: ✅ Complete
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
-
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
 - [x] T004 [P] Create `src/server/agent/__init__.py` with module exports
 - [x] T005 [P] Create `src/server/agent/base.py` with BaseAgent abstract class
@@ -34,7 +32,7 @@
 - [x] T009 Create unit tests in `tests/unit/agent/test_base.py`
 - [x] T010 Create unit tests in `tests/unit/agent/test_stream_controller.py`
 
-**Checkpoint**: Foundational ready - agent layer can now be implemented
+**Checkpoint**: ✅ Foundational ready - agent layer can now be implemented
 
 ---
 
@@ -49,16 +47,17 @@
 - [x] T011 [P] [US1] Create `src/server/agent/tools/dummy_tool.py` - simple echo tool for testing
 - [x] T012 [US1] Create `src/server/agent/langchain_agent.py` wrapping LangChain agent with astream_events()
 - [x] T013 [US1] Integrate StreamController callback → TTS text emission in langchain_agent.py
-- [ ] T014 [US1] Modify `src/server/voice_turn.py` to use LangChainAgent instead of OpenAILLM.chat_stream()
+- [ ] T014 [US1] Modify `src/server/voice_turn.py` to use LangChainAgent instead of OpenAILLM.chat_stream() ⚠️ PENDING
 - [x] T015 [US1] Add WebSocket event emission for tool lifecycle (tool_start, tool_complete)
 - [x] T016 [US1] Test: verify TTS emits text during dummy tool execution
 
-**Checkpoint**: User Story 1 should be fully functional
+**Checkpoint**: ⚠️ T014 pending - voice_turn.py integration required for full MVP
 
 ---
 
 ## Phase 4: User Story 2 - Voice Booking Flow (Priority: P1)
 
+**Status**: ✅ Complete
 **Goal**: User can book hotels via voice with continuous stream
 
 **Independent Test**: Say "book a hotel for tomorrow" and verify booking flow completes
@@ -71,7 +70,7 @@
 - [x] T020 [US2] Add progress callbacks to emit "searching hotels..." during tool execution
 - [x] T021 [US2] Integration test: booking flow with stream continuity verification
 
-**Checkpoint**: Booking flow functional with non-blocking stream
+**Checkpoint**: ✅ Booking flow functional with non-blocking stream
 
 ---
 
@@ -172,12 +171,14 @@
 | Phase | Tasks | Status |
 |-------|-------|--------|
 | Phase 1: Setup | T001-T003 | ✅ Complete |
-| Phase 2: Foundational | T004-T010 | TODO |
-| Phase 3: US1 | T011-T016 | TODO |
-| Phase 4: US2 | T017-T021 | TODO |
+| Phase 2: Foundational | T004-T010 | ✅ Complete |
+| Phase 3: US1 | T011-T016 | ⚠️ 15/16 done (T014 pending) |
+| Phase 4: US2 | T017-T021 | ✅ Complete |
 | Phase 5: US3 | T022-T026 | TODO |
 | Phase 6: US4 | T027-T030 | TODO |
 | Phase 7: Polish | T031-T035 | TODO |
 
 **Total**: 35 tasks  
-**MVP Scope**: Phase 2 + Phase 3 (T004-T016) = 13 tasks
+**Completed**: 24 tasks  
+**Pending**: 11 tasks (including T014 bridge task)  
+**MVP Scope**: Phase 2 + Phase 3 (T004-T016) = 13 tasks (11 done, 2 pending including T014)
