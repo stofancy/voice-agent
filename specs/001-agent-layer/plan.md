@@ -40,6 +40,7 @@ specs/001-agent-layer/
 ├── research.md          # LangChain streaming research (Phase 0)
 ├── data-model.md        # Agent, StreamController entities (Phase 1)
 ├── quickstart.md        # Local testing guide (Phase 1)
+├── contracts/           # Interface contracts (Phase 1)
 └── tasks.md             # Implementation tasks (Phase 2)
 ```
 
@@ -93,7 +94,7 @@ Browser → STT → LangChain Agent → StreamController → TTS → Browser
 ### Key Design Decisions
 
 1. **LangChain Agent as orchestration layer**: Wraps OpenAI-compatible LLM, adds tool definitions, manages ReAct loop
-2. **StreamController**: Custom component that intercepts agent steps and emits streaming events without blocking
+2. **StreamController**: Custom component that intercepts agent steps via `BaseCallbackHandler` and emits streaming events without blocking
 3. **Event-based communication**: Agent emits `tool_start`, `tool_progress`, `tool_complete`, `tool_error` events; StreamController handles these to maintain TTS stream
 4. **Backward compatible**: Existing WebSocket message types extended, not removed
 
@@ -115,14 +116,14 @@ class StreamingAgent:
 
 ## Phase Dependencies
 
-- **Research (Phase 0)**: Evaluate LangChain agent streaming capabilities ✅ Can start immediately
-- **Design (Phase 1)**: StreamController design, event schema ✅ Depends on Phase 0
-- **Foundational (Phase 2)**: Agent base class, router, basic tools ✅ Depends on Phase 1
-- **User Story 1 (Phase 3)**: Non-blocking tool calls with working stream ✅ Depends on Phase 2
-- **User Story 2 (Phase 4)**: Booking agent ✅ Depends on Phase 3
-- **User Story 3 (Phase 5)**: Multi-agent routing ✅ Depends on Phase 4
-- **User Story 4 (Phase 6)**: Interruption handling ✅ Depends on Phase 5
-- **Polish (Phase 7)**: Integration testing, performance validation ✅ Depends on Phase 6
+- **Research (Phase 0)**: ✅ Complete - LangChain streaming patterns identified
+- **Design (Phase 1)**: ✅ Complete - data-model.md, quickstart.md, contracts/
+- **Foundational (Phase 2)**: Agent base class, router, basic tools - NEXT
+- **User Story 1 (Phase 3)**: Non-blocking tool calls with working stream
+- **User Story 2 (Phase 4)**: Booking agent
+- **User Story 3 (Phase 5)**: Multi-agent routing
+- **User Story 4 (Phase 6)**: Interruption handling
+- **Polish (Phase 7)**: Integration testing, performance validation
 
 ## Complexity Tracking
 
