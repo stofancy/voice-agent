@@ -26,7 +26,7 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 [P] Create `src/server/agent/__init__.py` with module exports
+- [x] T004 [P] Create `src/server/agent/__init__.py` with module exports
 - [ ] T005 [P] Create `src/server/agent/base.py` with BaseAgent abstract class
 - [ ] T006 Create `src/server/agent/events.py` with event dataclasses (ToolStart, ToolComplete, etc.)
 - [ ] T007 Create `src/server/agent/stream_controller.py` with BaseCallbackHandler integration
