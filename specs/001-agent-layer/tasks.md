@@ -1,7 +1,7 @@
 # Tasks: Self-Managed Agent Layer
 
 **Input**: Design documents from `/specs/001-agent-layer/`
-**Prerequisites**: plan.md (required), spec.md (required for user stories)
+**Prerequisites**: plan.md (✅), spec.md (✅), research.md (✅), data-model.md (✅), contracts/ (✅), quickstart.md (✅)
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -9,27 +9,30 @@
 - **[Story]**: Which user story this task belongs to (e.g., US1, US2, US3)
 - Include exact file paths in descriptions
 
-## Phase 1: Setup
+## Phase 1: Setup ✅
 
-**Purpose**: Project initialization and LangChain dependency
+**Status**: Complete
 
-- [ ] T001 Create `src/server/agent/` directory structure
-- [ ] T002 Add langchain, langchain-openai dependencies to requirements.txt
-- [ ] T003 [P] Configure langchain logging for debugging
+- [x] T001 Create `src/server/agent/` directory structure
+- [x] T002 Add langchain, langchain-openai dependencies to requirements.txt
+- [x] T003 [P] Configure langchain logging for debugging
 
 ---
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
+**Status**: TODO - Next to implement  
 **Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T004 Create base agent interface in `src/server/agent/base.py`
-- [ ] T005 Create StreamController in `src/server/agent/stream_controller.py`
-- [ ] T006 Implement event emission system (tool_start, tool_progress, tool_complete, tool_error)
-- [ ] T007 Integrate StreamController with existing `StreamingSynthesis` class
-- [ ] T008 Create unit tests for StreamController in `tests/unit/agent/test_stream_controller.py`
+- [ ] T004 [P] Create `src/server/agent/__init__.py` with module exports
+- [ ] T005 [P] Create `src/server/agent/base.py` with BaseAgent abstract class
+- [ ] T006 Create `src/server/agent/events.py` with event dataclasses (ToolStart, ToolComplete, etc.)
+- [ ] T007 Create `src/server/agent/stream_controller.py` with BaseCallbackHandler integration
+- [ ] T008 [P] Create `src/server/agent/llm_factory.py` to wrap existing LLM with LangChain adapter
+- [ ] T009 Create unit tests in `tests/unit/agent/test_base.py`
+- [ ] T010 Create unit tests in `tests/unit/agent/test_stream_controller.py`
 
 **Checkpoint**: Foundational ready - agent layer can now be implemented
 
@@ -43,11 +46,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T009 [P] [US1] Create LangChain agent wrapper in `src/server/agent/langchain_wrapper.py`
-- [ ] T010 [US1] Integrate LangChain agent with StreamController for non-blocking events
-- [ ] T011 [US1] Add tool event handlers that emit intermediate TTS text during execution
-- [ ] T012 [US1] Modify `voice_turn.py` to use new agent layer instead of OpenAI LLM direct calls
-- [ ] T013 [US1] End-to-end test: verify TTS continues during simulated tool call
+- [ ] T011 [P] [US1] Create `src/server/agent/tools/dummy_tool.py` - simple echo tool for testing
+- [ ] T012 [US1] Create `src/server/agent/langchain_agent.py` wrapping LangChain agent with astream_events()
+- [ ] T013 [US1] Integrate StreamController callback → TTS text emission in langchain_agent.py
+- [ ] T014 [US1] Modify `src/server/voice_turn.py` to use LangChainAgent instead of OpenAILLM.chat_stream()
+- [ ] T015 [US1] Add WebSocket event emission for tool lifecycle (tool_start, tool_complete)
+- [ ] T016 [US1] Test: verify TTS emits text during dummy tool execution
 
 **Checkpoint**: User Story 1 should be fully functional
 
@@ -61,11 +65,11 @@
 
 ### Implementation for User Story 2
 
-- [ ] T014 [P] [US2] Create booking tool definitions in `src/server/agent/tools/booking.py`
-- [ ] T015 [US2] Create BookingAgent in `src/server/agent/booking_agent.py`
-- [ ] T016 [US2] Implement hotel booking ReAct prompt template
-- [ ] T017 [US2] Add booking confirmation TTS events
-- [ ] T018 [US2] Integration test: booking flow with stream continuity
+- [ ] T017 [P] [US2] Create `src/server/agent/tools/hotel_tool.py` with search and book functions
+- [ ] T018 [US2] Create `src/server/agent/booking_agent.py` extending BaseAgent with hotel tools
+- [ ] T019 [US2] Implement ReAct prompt template for booking in booking_agent.py
+- [ ] T020 [US2] Add progress callbacks to emit "searching hotels..." during tool execution
+- [ ] T021 [US2] Integration test: booking flow with stream continuity verification
 
 **Checkpoint**: Booking flow functional with non-blocking stream
 
@@ -79,11 +83,11 @@
 
 ### Implementation for User Story 3
 
-- [ ] T019 [P] [US3] Create query tool definitions in `src/server/agent/tools/query.py`
-- [ ] T020 [US3] Create QueryAgent in `src/server/agent/query_agent.py`
-- [ ] T021 [US3] Implement AgentRouter in `src/server/agent/router.py` with intent classification
-- [ ] T022 [US3] Add routing decision logging
-- [ ] T023 [US3] Test routing for booking vs query intents
+- [ ] T022 [P] [US3] Create `src/server/agent/tools/query_tool.py` with weather, search functions
+- [ ] T023 [US3] Create `src/server/agent/query_agent.py` extending BaseAgent with query tools
+- [ ] T024 [US3] Create `src/server/agent/router.py` with intent classification (keyword-based)
+- [ ] T025 [US3] Add routing decision logging in router.py
+- [ ] T026 [US3] Test: verify booking intent → BookingAgent, query intent → QueryAgent
 
 **Checkpoint**: Multi-agent routing functional
 
@@ -97,10 +101,10 @@
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] Add interruption detection to TurnContext
-- [ ] T025 [US4] Implement tool call cancellation in StreamController
-- [ ] T026 [US4] Add TTS fallback text during interruption
-- [ ] T027 [US4] Test interruption during tool execution
+- [ ] T027 [P] [US6] Add cancellation token to TurnContext in `src/server/turn_context.py`
+- [ ] T028 [US6] Implement tool call cancellation in StreamController (check is_cancelled before emitting)
+- [ ] T029 [US6] Add TTS fallback text "Sorry, let me start over" on interruption
+- [ ] T030 [US6] Test: speak during tool execution, verify new request processed
 
 **Checkpoint**: Interruption handling functional
 
@@ -110,11 +114,11 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T028 [P] Documentation: Update `docs/agent-layer.md` with architecture overview
-- [ ] T029 Code cleanup and refactoring of agent module
-- [ ] T030 Performance optimization: verify <200ms stream gap during tool calls
-- [ ] T031 [P] Add integration tests in `tests/integration/test_agent_layer.py`
-- [ ] T032 Security: audit tool definitions for safe execution
+- [ ] T031 [P] Update `docs/agent-layer.md` with architecture overview
+- [ ] T032 Code cleanup and refactoring of agent module
+- [ ] T033 Performance: measure stream gap during tool calls, target <200ms
+- [ ] T034 [P] Add integration tests in `tests/integration/test_agent_layer.py`
+- [ ] T035 Security: audit tool definitions for safe execution
 
 ---
 
@@ -122,18 +126,17 @@
 
 ### Phase Dependencies
 
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
+- **Setup (Phase 1)**: ✅ Complete
+- **Foundational (Phase 2)**: TODO - BLOCKS all user stories
 - **User Stories (Phase 3-6)**: All depend on Foundational phase completion
-  - US1 (Non-blocking) → US2 (Booking) → US3 (Routing) → US4 (Interruption)
 - **Polish (Final Phase)**: Depends on all user stories being complete
 
 ### User Story Dependencies
 
 - **User Story 1 (P1)**: Can start after Foundational - No dependencies on other stories
-- **User Story 2 (P2)**: Depends on US1 (uses same agent wrapper)
-- **User Story 3 (P3)**: Depends on US1 (adds routing)
-- **User Story 4 (P1)**: Depends on US1 (interruption during tool calls)
+- **User Story 2 (P2)**: Can start after Foundational - Uses BookingAgent
+- **User Story 3 (P3)**: Can start after Foundational - Adds AgentRouter
+- **User Story 4 (P1)**: Can start after Foundational - Uses cancellation tokens
 
 ### Within Each User Story
 
@@ -147,7 +150,7 @@
 
 ### MVP First (User Story 1 Only)
 
-1. Complete Phase 1: Setup
+1. Complete Phase 1: Setup ✅
 2. Complete Phase 2: Foundational
 3. Complete Phase 3: User Story 1 (Non-blocking Tool Calls)
 4. **STOP and VALIDATE**: Test stream continuity during tool calls
@@ -161,3 +164,20 @@
 4. Add US3 → Test routing → Deploy/Demo
 5. Add US4 → Test interruption → Deploy/Demo
 6. Polish → Final release
+
+---
+
+## Task Summary
+
+| Phase | Tasks | Status |
+|-------|-------|--------|
+| Phase 1: Setup | T001-T003 | ✅ Complete |
+| Phase 2: Foundational | T004-T010 | TODO |
+| Phase 3: US1 | T011-T016 | TODO |
+| Phase 4: US2 | T017-T021 | TODO |
+| Phase 5: US3 | T022-T026 | TODO |
+| Phase 6: US4 | T027-T030 | TODO |
+| Phase 7: Polish | T031-T035 | TODO |
+
+**Total**: 35 tasks  
+**MVP Scope**: Phase 2 + Phase 3 (T004-T016) = 13 tasks
