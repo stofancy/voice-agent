@@ -10,18 +10,16 @@ WebSocket server that handles:
 """
 
 import asyncio
-import base64
-import json
 import os
-import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from loguru import logger
+from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
 from . import perf_logger
@@ -29,20 +27,23 @@ from .auth import APIKey, load_keys_from_env, token_manager
 from .tts import create_tts
 from .stt import create_stt
 from .llm import create_llm
-from .text_utils import clean_for_speech
 from .vad import VoiceActivityDetector
+from .messages import parse_message
+from .websocket_session import WebSocketSession
+from .message_router import (
+    handle_start_listening,
+    handle_stop_listening,
+    handle_interrupt,
+    handle_audio,
+    handle_ping,
+    handle_perf_report,
+    handle_client_log,
+)
 
 
 TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
 SUBTITLE_STREAMING = os.getenv("OPENCLAW_SUBTITLE_STREAMING", "true").lower() == "true"
-TTS_DATA_BUFFER_SIZE = int(os.getenv("OPENCLAW_TTS_DATA_BUFFER_SIZE", "8192"))
-TTS_TIME_BUFFER_SECONDS = float(os.getenv("OPENCLAW_TTS_TIME_BUFFER_SECONDS", "0.1"))
 TTS_SAMPLE_RATE = int(os.getenv("OPENCLAW_TTS_SAMPLE_RATE", "24000"))
-
-
-# Streaming configuration from environment
-TTS_STREAMING = os.getenv("OPENCLAW_TTS_STREAMING", "true").lower() == "true"
-SUBTITLE_STREAMING = os.getenv("OPENCLAW_SUBTITLE_STREAMING", "true").lower() == "true"
 
 
 class Settings(BaseSettings):
@@ -72,27 +73,29 @@ class Settings(BaseSettings):
     llm_model: Optional[str] = None
     llm_base_url: Optional[str] = None
 
-    class Config:
-        env_prefix = "OPENCLAW_"
-        env_file = ".env"
-        extra = "allow"
+    model_config = ConfigDict(
+        env_prefix="OPENCLAW_",
+        env_file=".env",
+        extra="allow",
+    )
 
 
 settings = Settings()
-app = FastAPI(title="OpenClaw Voice", version="0.1.0")
 
-stt = None  # BaseSTT instance, created by stt_factory
-tts = None  # BaseTTS instance, created by tts_factory
-backend = None  # BaseLLM instance, created by llm_factory
+stt = None
+tts = None
+backend = None
 vad: Optional[VoiceActivityDetector] = None
 
 
-@app.on_event("startup")
-async def startup():
-    """Initialize models on server start."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage server startup and shutdown."""
     global stt, tts, backend, vad
 
+    # Startup
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
+    logger.info(f"TTS config: STREAMING={TTS_STREAMING}")
 
     load_keys_from_env()
     if settings.require_auth:
@@ -100,7 +103,6 @@ async def startup():
     else:
         logger.warning("⚠️ Authentication DISABLED (dev mode)")
 
-    logger.info(f"Loading STT: provider={settings.stt_provider}, model={settings.stt_model}")
     stt = create_stt(
         provider=settings.stt_provider,
         api_key=settings.stt_api_key,
@@ -110,7 +112,6 @@ async def startup():
     )
 
     tts_instructions = os.getenv("OPENCLAW_TTS_INSTRUCTIONS")
-    logger.info(f"Loading TTS: provider={settings.tts_provider}, model={settings.tts_model}")
     tts = create_tts(
         provider=settings.tts_provider,
         api_key=settings.tts_api_key,
@@ -121,7 +122,6 @@ async def startup():
         instructions=tts_instructions,
     )
 
-    logger.info(f"Loading LLM: provider={settings.llm_provider}, model={settings.llm_model}")
     backend = create_llm(
         provider=settings.llm_provider,
         api_key=settings.llm_api_key,
@@ -135,19 +135,18 @@ async def startup():
         ),
     )
 
-    logger.info("Loading VAD model")
     vad = VoiceActivityDetector()
-
     logger.info("✅ OpenClaw Voice server (Bailian) ready!")
 
+    yield
 
-@app.on_event("shutdown")
-async def shutdown():
-    """Release network resources on server stop."""
-    global backend
+    # Shutdown
     if backend:
         await backend.close()
         logger.info("✅ Backend connections closed")
+
+
+app = FastAPI(title="OpenClaw Voice", version="0.1.0", lifespan=lifespan)
 
 
 @app.get("/")
@@ -156,56 +155,6 @@ async def shutdown():
 async def index():
     """Serve v1 demo page."""
     return FileResponse("src/client/index.html")
-
-
-@app.post("/api/keys")
-async def create_api_key(
-    name: str,
-    tier: str = "free",
-    master_key: Optional[str] = None,
-):
-    """Create a new API key (requires master key)."""
-    if settings.require_auth:
-        if not master_key and not settings.master_key:
-            return {"error": "Master key required"}
-
-        provided_key = master_key or ""
-        if provided_key != settings.master_key:
-            key = token_manager.validate_key(provided_key)
-            if not key or key.tier != "enterprise":
-                return {"error": "Invalid master key"}
-
-    from .auth import PRICING_TIERS
-
-    if tier not in PRICING_TIERS:
-        return {"error": f"Invalid tier. Options: {list(PRICING_TIERS.keys())}"}
-
-    tier_config = PRICING_TIERS[tier]
-    plaintext_key, api_key = token_manager.generate_key(
-        name=name,
-        tier=tier,
-        rate_limit=tier_config["rate_limit"],
-        monthly_minutes=tier_config["monthly_minutes"],
-    )
-
-    return {
-        "api_key": plaintext_key,
-        "key_id": api_key.key_id,
-        "name": api_key.name,
-        "tier": api_key.tier,
-        "monthly_minutes": api_key.monthly_minutes,
-        "rate_limit": api_key.rate_limit_per_minute,
-    }
-
-
-@app.get("/api/usage")
-async def get_usage(api_key: str):
-    """Get usage stats for an API key."""
-    key = token_manager.validate_key(api_key)
-    if not key:
-        return {"error": "Invalid API key"}
-
-    return token_manager.get_usage(key)
 
 
 async def _validate_ws_auth(websocket: WebSocket) -> Optional[APIKey]:
@@ -246,269 +195,74 @@ async def websocket_endpoint(websocket: WebSocket):
 
     await websocket.accept()
 
-    connection_state = "IDLE"
-    audio_buffer: list[np.ndarray] = []
-    response_task: Optional[asyncio.Task] = None
-
-    last_perf_data: dict = {}
-    last_transcript: str = ""
-    last_response: str = ""
-
-    async def send_listening_stopped_once():
-        nonlocal connection_state
-        await websocket.send_json({"type": "listening_stopped"})
-        connection_state = "IDLE"
-
-    async def run_turn(audio_data: np.ndarray):
-        nonlocal connection_state, last_transcript, last_response, last_perf_data
-        tts_started = False
-
-        # Perf data dict, only populated when perf logging is enabled
-        perf_data: dict = {}
-
-        try:
-            connection_state = "PROCESSING"
-
-            # ── STT stage ──────────────────────────────────────────
-            if perf_logger.is_enabled():
-                t_start = time.perf_counter()
-
-            transcript, success = await stt.transcribe(audio_data)
-
-            if perf_logger.is_enabled():
-                t_stt_end = time.perf_counter()
-                perf_data["stt_ms"] = (t_stt_end - t_start) * 1000
-                t_llm_first: Optional[float] = None
-                t_llm_end: Optional[float] = None
-                t_tts_first: Optional[float] = None
-                t_tts_end: Optional[float] = None
-
-            last_transcript = transcript
-            await websocket.send_json(
-                {
-                    "type": "transcript",
-                    "text": transcript,
-                    "final": True,
-                }
-            )
-            logger.info(f"🎤 Transcript: {transcript}")
-
-            if not transcript.strip() or not success:
-                await send_listening_stopped_once()
-                if perf_logger.is_enabled():
-                    last_perf_data = perf_data
-                return
-
-            # ── LLM + TTS stage (unified stream interface) ─────────
-            full_response = ""
-            tts_stream = tts.create_stream()
-
-            async for chunk in backend.chat_stream(transcript):
-                full_response += chunk
-                if perf_logger.is_enabled() and t_llm_first is None:
-                    t_llm_first = time.perf_counter()
-                    perf_data["llm_ttft_ms"] = (t_llm_first - t_stt_end) * 1000
-                if SUBTITLE_STREAMING:
-                    await websocket.send_json({"type": "subtitle_chunk", "text": chunk})
-                # Feed LLM output to TTS in real-time
-                tts_stream.feed(chunk)
-
-            if perf_logger.is_enabled():
-                t_llm_end = time.perf_counter()
-                perf_data["llm_gen_ms"] = (t_llm_end - t_llm_first) * 1000
-
-            last_response = full_response
-            if not SUBTITLE_STREAMING:
-                await websocket.send_json({"type": "response_chunk", "text": full_response})
-
-            # Signal TTS that all text has been sent
-            tts_stream.finish()
-
-            tts_started = True
-            connection_state = "SPEAKING"
-            await websocket.send_json({"type": "tts_start"})
-
-            # ── TTS audio output ────────────────────────────────────
-            if perf_logger.is_enabled():
-                t_tts_first = None
-                t_tts_end = None
-
-            tts_start_time = asyncio.get_event_loop().time()
-            audio_chunks_sent = 0
-            audio_bytes_total = 0
-            buffer = bytearray()
-            first_chunk_received = False
-            buffer_start_time: Optional[float] = None
-
-            async for audio_chunk in tts_stream:
-                buffer.extend(audio_chunk)
-                audio_bytes_total += len(audio_chunk)
-
-                if not first_chunk_received:
-                    first_chunk_received = True
-                    buffer_start_time = asyncio.get_event_loop().time()
-                    if perf_logger.is_enabled() and t_tts_first is None:
-                        t_tts_first = time.perf_counter()
-                        perf_data["tts_ttfa_ms"] = (t_tts_first - t_llm_end) * 1000
-                    logger.info(f"🔊 TTS first chunk, buffering {TTS_TIME_BUFFER_SECONDS}s...")
-
-                current_time = asyncio.get_event_loop().time()
-                time_buffer_elapsed = (
-                    (current_time - buffer_start_time) if buffer_start_time is not None else 0
-                )
-
-                if (
-                    len(buffer) >= TTS_DATA_BUFFER_SIZE
-                    and time_buffer_elapsed >= TTS_TIME_BUFFER_SECONDS
-                ):
-                    audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                    await websocket.send_json(
-                        {
-                            "type": "audio_chunk",
-                            "data": audio_b64,
-                            "sample_rate": TTS_SAMPLE_RATE,
-                        }
-                    )
-                    audio_chunks_sent += 1
-                    chunk_time = asyncio.get_event_loop().time()
-                    logger.debug(
-                        "🔊 sent chunk #{}: {} bytes, latency {:.1f}ms (buffer {:.1f}ms)",
-                        audio_chunks_sent,
-                        len(buffer),
-                        (chunk_time - tts_start_time) * 1000,
-                        time_buffer_elapsed * 1000,
-                    )
-                    buffer = bytearray()
-                    buffer_start_time = asyncio.get_event_loop().time()
-
-            if buffer:
-                audio_b64 = base64.b64encode(bytes(buffer)).decode()
-                await websocket.send_json(
-                    {
-                        "type": "audio_chunk",
-                        "data": audio_b64,
-                        "sample_rate": TTS_SAMPLE_RATE,
-                    }
-                )
-                audio_chunks_sent += 1
-
-            if perf_logger.is_enabled():
-                t_tts_end = time.perf_counter()
-                perf_data["tts_total_ms"] = (t_tts_end - t_llm_end) * 1000
-
-            tts_total_time = asyncio.get_event_loop().time() - tts_start_time
-            logger.info(
-                "🔊 TTS complete: {} chunks, total {:.1f}ms",
-                audio_chunks_sent,
-                tts_total_time * 1000,
-            )
-
-            # Store perf data for the outer scope to pick up
-            if perf_logger.is_enabled():
-                last_perf_data = perf_data
-
-            await websocket.send_json({"type": "tts_end", "interrupted": False})
-            await websocket.send_json({"type": "response_complete", "text": full_response})
-            await send_listening_stopped_once()
-
-        except asyncio.CancelledError:
-            logger.info("🔴 Response task cancelled")
-            if tts_started:
-                await websocket.send_json({"type": "tts_end", "interrupted": True})
-            await send_listening_stopped_once()
-            raise
-        except Exception as e:
-            logger.error(f"AI/TTS error: {type(e).__name__}: {e}")
-            fallback = "Sorry, I had trouble processing that. Could you try again?"
-            await websocket.send_json({"type": "response_chunk", "text": fallback})
-            await websocket.send_json({"type": "response_complete", "text": fallback})
-            if tts_started:
-                await websocket.send_json({"type": "tts_end", "interrupted": True})
-            await send_listening_stopped_once()
-
-    async def cancel_response(send_interrupt_event: bool):
-        nonlocal response_task
-        if response_task and not response_task.done():
-            response_task.cancel()
-            try:
-                await response_task
-            except asyncio.CancelledError:
-                pass
-            if send_interrupt_event:
-                await websocket.send_json({"type": "interrupt_complete"})
-        response_task = None
+    session = WebSocketSession(websocket)
 
     try:
-        while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            msg_type = msg.get("type")
+        async for raw in _message_stream(websocket):
+            message = parse_message(raw)
+            msg_type = message.type.value
             logger.debug(f"📨 Received: {msg_type}")
 
             if msg_type == "start_listening":
-                await cancel_response(send_interrupt_event=False)
-                audio_buffer = []
-                connection_state = "LISTENING"
-                await websocket.send_json({"type": "listening_started"})
+                await handle_start_listening(session)
 
             elif msg_type == "stop_listening":
-                if connection_state != "LISTENING":
-                    await send_listening_stopped_once()
+                task = await handle_stop_listening(
+                    session=session,
+                    stt=stt,
+                    backend=backend,
+                    tts=tts,
+                    TTS_SAMPLE_RATE=TTS_SAMPLE_RATE,
+                    SUBTITLE_STREAMING=SUBTITLE_STREAMING,
+                )
+                if task is None and session.is_idle:
                     continue
-
-                connection_state = "PROCESSING"
-                if not audio_buffer:
-                    await send_listening_stopped_once()
-                    continue
-
-                audio_data = np.concatenate(audio_buffer)
-                audio_buffer = []
-                response_task = asyncio.create_task(run_turn(audio_data))
 
             elif msg_type == "interrupt":
-                await websocket.send_json({"type": "interrupt_ack"})
-                await cancel_response(send_interrupt_event=True)
+                await handle_interrupt(session)
 
-            elif msg_type == "audio" and connection_state == "LISTENING":
-                audio_bytes = base64.b64decode(msg["data"])
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                audio_buffer.append(audio_np)
-
-                if vad and len(audio_np) > 0:
-                    has_speech = vad.is_speech(audio_np)
-                    await websocket.send_json(
-                        {
-                            "type": "vad_status",
-                            "speech_detected": has_speech,
-                        }
-                    )
+            elif msg_type == "audio" and session.is_listening:
+                await handle_audio(session=session, message=message, vad=vad)
 
             elif msg_type == "ping":
-                await websocket.send_json({"type": "pong"})
+                await handle_ping(session)
 
             elif msg_type == "perf_report":
-                if perf_logger.is_enabled():
-                    frontend_metrics = msg.get("metrics", {})
-                    context = {
-                        "transcript": last_transcript,
-                        "response_length": len(last_response),
-                        "tts_model": settings.tts_model,
-                        "llm_model": backend.model_name if backend else "unknown",
-                        "tts_voice": settings.tts_voice,
-                    }
-                    perf_logger.log_round(
-                        frontend_data=frontend_metrics,
-                        backend_data=last_perf_data,
-                        context=context,
-                    )
+                await handle_perf_report(
+                    session=session,
+                    message=message,
+                    perf_logger=perf_logger,
+                    last_transcript=session.turn_context.transcript,
+                    last_response=session.turn_context.full_response,
+                    last_perf_data=session.turn_context.perf_data,
+                    settings=settings,
+                    backend=backend,
+                )
+
+            elif msg_type == "client_log":
+                await handle_client_log(session=session, message=message)
 
     except WebSocketDisconnect:
         logger.info("Client disconnected")
-        await cancel_response(send_interrupt_event=False)
     except Exception as e:
         logger.error(f"WebSocket error: {e}")
-        await cancel_response(send_interrupt_event=False)
+    finally:
+        await session.cancel_response(send_interrupt_event=False)
+        await _close_websocket(websocket)
+
+
+async def _message_stream(websocket: WebSocket):
+    """Yield incoming text messages from WebSocket."""
+    while True:
+        yield await websocket.receive_text()
+
+
+async def _close_websocket(websocket: WebSocket) -> None:
+    """Close WebSocket, ignoring already-closed errors."""
+    try:
         await websocket.close()
+    except (WebSocketDisconnect, RuntimeError):
+        pass  # WebSocket already closed
 
 
 client_dir = Path(__file__).parent.parent / "client"
@@ -522,67 +276,6 @@ if client_dir.exists():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-                            })
-                
-                audio_buffer = []
-                await websocket.send_json({"type": "listening_stopped"})
-                logger.debug("Stopped listening")
-                
-            elif msg["type"] == "audio" and is_listening:
-                # Decode base64 audio
-                audio_bytes = base64.b64decode(msg["data"])
-                audio_np = np.frombuffer(audio_bytes, dtype=np.float32)
-                audio_buffer.append(audio_np)
-                logger.debug(f"📥 Audio chunk: {len(audio_np)} samples, buffer now: {len(audio_buffer)} chunks, total: {sum(len(c) for c in audio_buffer)} samples")
-                
-                # VAD check - notify client if speech detected
-                if vad and len(audio_np) > 0:
-                    has_speech = vad.is_speech(audio_np)
-                    await websocket.send_json({
-                        "type": "vad_status",
-                        "speech_detected": has_speech,
-                    })
-                
-            elif msg["type"] == "ping":
-                await websocket.send_json({"type": "pong"})
-                
-    except WebSocketDisconnect:
-        logger.info("Client disconnected")
-    except Exception as e:
-        logger.error(f"WebSocket error: {e}")
-        await websocket.close()
-
-
-# Serve static files for client
-client_dir = Path(__file__).parent.parent / "client"
-if client_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "src.server.main:app",
-        host=settings.host,
-        port=settings.port,
-        reload=True,
-    )
-ue,
-    )
-es for client
-client_dir = Path(__file__).parent.parent / "client"
-if client_dir.exists():
-    app.mount("/static", StaticFiles(directory=str(client_dir)), name="static")
-
-
-if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(
         "src.server.main:app",
         host=settings.host,

@@ -1,3 +1,5 @@
+> **[Archived]** This document is a historical session record (2026-03-18) and may not reflect the current state.
+
 # Session Handover 2026-03-18
 
 **Session 时间**: 2026-03-18 13:42 - 16:15 (约 2.5 小时)  

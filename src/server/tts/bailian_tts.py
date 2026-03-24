@@ -56,7 +56,7 @@ class BailianTTS(BaseTTS):
         return self._session
 
     def create_stream(self) -> TTSStream:
-        return _BufferedStream(self)
+        return _IncrementalStream(self)
 
     async def close(self) -> None:
         if self._session and not self._session.closed:
@@ -104,22 +104,65 @@ class BailianTTS(BaseTTS):
                             continue
 
 
-class _BufferedStream(TTSStream):
-    """攒完所有文本再一次性合成"""
+class _IncrementalStream(TTSStream):
+    """
+    增量 TTS 流：feed() 时边接收文本边合成音频。
 
-    def __init__(self, tts: BailianTTS):
+    内部启动后台任务，当累积文本达到 min_text_length 时自动触发合成。
+    """
+
+    def __init__(self, tts: BailianTTS, min_text_length: int = 10):
         self._tts = tts
+        self._min_text_length = min_text_length
         self._buffer = ""
         self._finished = False
+        self._audio_queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._synth_task: Optional[asyncio.Task] = None
 
     def feed(self, text: str) -> None:
         self._buffer += text
+        # 启动后台合成任务（如果还没启动）
+        if self._synth_task is None or self._synth_task.done():
+            self._synth_task = asyncio.create_task(self._synthesize_loop())
 
     def finish(self) -> None:
         self._finished = True
+        # 通知合成任务结束
+        if self._synth_task and not self._synth_task.done():
+            self._synth_task.cancel()
+
+    async def _synthesize_loop(self) -> None:
+        """后台任务：累积文本，达到阈值时合成"""
+        while not self._finished or self._buffer:
+            if len(self._buffer) >= self._min_text_length:
+                text_to_synth = self._buffer
+                self._buffer = ""
+                try:
+                    async for chunk in self._tts._synthesize(text_to_synth):
+                        await self._audio_queue.put(chunk)
+                except asyncio.CancelledError:
+                    break
+                except Exception as e:
+                    logger.error(f"❌ Incremental TTS error: {e}")
+                    break
+            else:
+                await asyncio.sleep(0.05)  # 等待更多文本
+
+        # 发送剩余文本的音频
+        if self._buffer:
+            text_to_synth = self._buffer
+            self._buffer = ""
+            try:
+                async for chunk in self._tts._synthesize(text_to_synth):
+                    await self._audio_queue.put(chunk)
+            except Exception as e:
+                logger.error(f"❌ Final TTS error: {e}")
+
+        await self._audio_queue.put(b"__END__")
 
     async def __aiter__(self) -> AsyncGenerator[bytes, None]:
-        if not self._buffer.strip():
-            return
-        async for chunk in self._tts._synthesize(self._buffer):
+        while True:
+            chunk = await self._audio_queue.get()
+            if chunk == b"__END__":
+                break
             yield chunk
