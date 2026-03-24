@@ -31,8 +31,8 @@
 - [x] T006 Create `src/server/agent/events.py` with event dataclasses (ToolStart, ToolComplete, etc.)
 - [x] T007 Create `src/server/agent/stream_controller.py` with BaseCallbackHandler integration
 - [x] T008 [P] Create `src/server/agent/llm_factory.py` to wrap existing LLM with LangChain adapter
-- [ ] T009 Create unit tests in `tests/unit/agent/test_base.py`
-- [ ] T010 Create unit tests in `tests/unit/agent/test_stream_controller.py`
+- [x] T009 Create unit tests in `tests/unit/agent/test_base.py`
+- [x] T010 Create unit tests in `tests/unit/agent/test_stream_controller.py`
 
 **Checkpoint**: Foundational ready - agent layer can now be implemented
 
