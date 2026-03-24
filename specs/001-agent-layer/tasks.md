@@ -69,7 +69,7 @@
 - [x] T018 [US2] Create `src/server/agent/booking_agent.py` extending BaseAgent with hotel tools
 - [x] T019 [US2] Implement ReAct prompt template for booking in booking_agent.py
 - [x] T020 [US2] Add progress callbacks to emit "searching hotels..." during tool execution
-- [ ] T021 [US2] Integration test: booking flow with stream continuity verification
+- [x] T021 [US2] Integration test: booking flow with stream continuity verification
 
 **Checkpoint**: Booking flow functional with non-blocking stream
 
