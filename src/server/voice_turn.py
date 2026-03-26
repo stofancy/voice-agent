@@ -1,7 +1,7 @@
 """
 Voice turn orchestration.
 
-Handles a complete voice turn: STT → StreamingSynthesis → WebSocket messages.
+Handles a complete voice turn: STT → StreamingSynthesis/AgentStreamingSynthesis → WebSocket messages.
 """
 
 import asyncio
@@ -15,6 +15,12 @@ from .streaming_synthesis import StreamingSynthesis, SynthesisConfig
 
 if TYPE_CHECKING:
     from .turn_context import TurnContext
+    from .agent.base import BaseAgent
+
+from .agent import LANGCHAIN_AVAILABLE
+
+if LANGCHAIN_AVAILABLE:
+    from .agent import AgentStreamingSynthesis, AgentSynthesisConfig
 
 
 class VoiceTurn:
@@ -23,7 +29,7 @@ class VoiceTurn:
 
     Handles:
     - STT transcription
-    - LLM + TTS streaming (via StreamingSynthesis)
+    - LLM + TTS streaming (via StreamingSynthesis or AgentStreamingSynthesis)
     - WebSocket message state machine
 
     Args:
@@ -35,6 +41,7 @@ class VoiceTurn:
         turn_context: Per-turn context for cancellation
         connection_state: Optional shared state machine. If not provided,
             creates an internal one (for isolated testing).
+        agent: Optional LangChain agent for non-blocking tool execution
 
     Usage:
         turn = VoiceTurn(
@@ -45,6 +52,18 @@ class VoiceTurn:
             config=synthesis_config,
             turn_context=turn_context,
             connection_state=session.connection_state,
+        )
+        result = await turn.execute(audio_data)
+
+    Usage with Agent:
+        turn = VoiceTurn(
+            stt=stt,
+            llm=llm,
+            tts=tts,
+            websocket=ws,
+            config=synthesis_config,
+            turn_context=turn_context,
+            agent=booking_agent,
         )
         result = await turn.execute(audio_data)
     """
@@ -58,6 +77,7 @@ class VoiceTurn:
         config: SynthesisConfig,
         turn_context: "TurnContext",
         connection_state: Optional[ConnectionStateMachine] = None,
+        agent: Optional["BaseAgent"] = None,
     ):
         self._stt = stt
         self._llm = llm
@@ -66,6 +86,7 @@ class VoiceTurn:
         self._config = config
         self._turn_context = turn_context
         self._state = connection_state or ConnectionStateMachine()
+        self._agent = agent
 
     async def execute(self, audio_data: np.ndarray) -> str:
         """
@@ -97,13 +118,25 @@ class VoiceTurn:
             await self._ws.send_tts_start()
             tts_started = True
 
-            synthesis = StreamingSynthesis(
-                llm=self._llm,
-                tts=self._tts,
-                websocket=self._ws,
-                config=self._config,
-                turn_context=self._turn_context,
-            )
+            if self._agent is not None and LANGCHAIN_AVAILABLE:
+                synthesis = AgentStreamingSynthesis(
+                    agent=self._agent,
+                    tts=self._tts,
+                    websocket=self._ws,
+                    config=AgentSynthesisConfig(
+                        sample_rate=self._config.sample_rate,
+                        subtitle_streaming=self._config.subtitle_streaming,
+                    ),
+                    turn_context=self._turn_context,
+                )
+            else:
+                synthesis = StreamingSynthesis(
+                    llm=self._llm,
+                    tts=self._tts,
+                    websocket=self._ws,
+                    config=self._config,
+                    turn_context=self._turn_context,
+                )
 
             try:
                 result = await synthesis.run(transcript)
@@ -132,6 +165,8 @@ class VoiceTurn:
             logger.info("🔴 Voice turn cancelled")
             if tts_started:
                 try:
+                    fallback = "Sorry, let me start over."
+                    await self._ws.send_response_complete(fallback)
                     await self._ws.send_tts_end(interrupted=True)
                 except Exception:
                     pass  # WebSocket may already be closed

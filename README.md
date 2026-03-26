@@ -28,20 +28,20 @@ Talk to your AI like you talk to Alexa — but self-hosted, private, and connect
 git clone https://github.com/Purple-Horizons/openclaw-voice.git
 cd openclaw-voice
 
-# Install
+# Install (uses modern pyproject.toml)
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 
 # Optional: Install VAD support (better noise handling)
-pip install torch torchaudio
+pip install -e ".[tts]"
 
 # Configure (create .env from example)
 cp .env.example .env
 # Edit .env with your API keys
 
 # Run
-PYTHONPATH=. python -m src.server.main
+python -m src.server.main
 
 # Open http://localhost:8765
 ```
@@ -55,8 +55,8 @@ cd /tmp && \
 git clone https://github.com/Purple-Horizons/openclaw-voice.git && \
 cd openclaw-voice && \
 python3 -m venv .venv && source .venv/bin/activate && \
-pip install -r requirements.txt torch torchaudio && \
-PYTHONPATH=. ALI_BAILIAN_API_KEY="$ALI_BAILIAN_API_KEY" OPENAI_API_KEY="$OPENAI_API_KEY" \
+pip install -e ".[tts]" && \
+ALI_BAILIAN_API_KEY="$ALI_BAILIAN_API_KEY" OPENAI_API_KEY="$OPENAI_API_KEY" \
   nohup python -m src.server.main > /tmp/voice-server.log 2>&1 &
 ```
 
