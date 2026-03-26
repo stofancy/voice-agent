@@ -131,7 +131,7 @@
 ### Integration & Cleanup
 
 - [x] T031 [P] Update `docs/agent-layer.md` with architecture overview ✅ DONE
-- [ ] T032 Code cleanup and refactoring of agent module
+- [x] T032 Code cleanup and refactoring of agent module ✅ DONE (aligned TOOL_PROGRESS_MESSAGES with spec)
 - [ ] T034 [P] Add integration tests in `tests/integration/test_agent_layer.py`
 
 ---
@@ -191,9 +191,9 @@
 | Phase 4: US2 | T017-T021 | ✅ Complete |
 | Phase 5: US3 | T022-T026 | ✅ Complete |
 | Phase 6: US4 | T027-T030 | ✅ Complete |
-| Phase 7: Polish | T031-T039 | 2/9 done (T032-T034, T036-T039 pending) |
+| Phase 7: Polish | T031-T039 | 3/9 done (T033-T034, T036-T039 pending) |
 
 **Total**: 39 tasks  
-**Completed**: 33 tasks  
-**Pending**: 6 tasks (T032-T034, T036-T039)  
+**Completed**: 34 tasks  
+**Pending**: 5 tasks (T033-T034, T036-T039)  
 **MVP Scope**: Phase 2 + Phase 3 (T004-T016) = ✅ Complete
