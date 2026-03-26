@@ -9,6 +9,8 @@ from typing import List, Optional
 from .base import BaseAgent
 from .langchain_agent import LangChainAgent
 from .tools.dummy_tool import get_dummy_tools
+from .tools.query_tool import get_query_tools
+from .tools.hotel_tool import get_hotel_tools
 
 
 def create_query_agent(
@@ -17,16 +19,16 @@ def create_query_agent(
 ) -> LangChainAgent:
     """
     Create a query agent for handling information requests.
-    
+
     Args:
         llm: LangChain-compatible LLM
         stream_controller: Optional stream controller for TTS
-        
+
     Returns:
         Configured LangChainAgent instance
     """
-    tools = get_dummy_tools()
-    
+    tools = get_query_tools()
+
     return LangChainAgent(
         agent_type="query",
         llm=llm,
@@ -42,16 +44,16 @@ def create_booking_agent(
 ) -> LangChainAgent:
     """
     Create a booking agent for handling hotel/flight bookings.
-    
+
     Args:
         llm: LangChain-compatible LLM
         stream_controller: Optional stream controller for TTS
-        
+
     Returns:
         Configured LangChainAgent instance
     """
-    tools = get_dummy_tools()
-    
+    tools = get_hotel_tools()
+
     return LangChainAgent(
         agent_type="booking",
         llm=llm,
@@ -67,16 +69,16 @@ def create_default_agent(
 ) -> LangChainAgent:
     """
     Create a default agent with general-purpose tools.
-    
+
     Args:
         llm: LangChain-compatible LLM
         stream_controller: Optional stream controller for TTS
-        
+
     Returns:
         Configured LangChainAgent instance
     """
     tools = get_dummy_tools()
-    
+
     return LangChainAgent(
         agent_type="default",
         llm=llm,

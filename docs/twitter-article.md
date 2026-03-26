@@ -40,7 +40,7 @@ If you're technical (or have an AI assistant that is):
 git clone https://github.com/Purple-Horizons/openclaw-voice.git
 cd openclaw-voice
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e ".[dev]"
 ALI_BAILIAN_API_KEY="your-key" OPENAI_API_KEY="your-key" \
   python -m src.server.main
 ```

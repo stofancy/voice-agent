@@ -1,6 +1,9 @@
 # OpenClaw Voice - Docker image
 
-FROM python:3.11-slim
+FROM python:3.12-slim
+
+# Install uv for fast package management
+RUN pip install uv
 
 # Create non-root user
 RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuser
@@ -8,11 +11,11 @@ RUN groupadd -r appuser && useradd -r -g appuser -d /app -s /sbin/nologin appuse
 # Create app directory
 WORKDIR /app
 
-# Copy requirements
-COPY requirements.txt ./
+# Copy pyproject.toml and install dependencies
+COPY pyproject.toml ./
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies using uv (modern, fast)
+RUN uv pip install --system -e .
 
 # Copy application code
 COPY src/ ./src/
