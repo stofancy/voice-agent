@@ -113,11 +113,26 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
+### Observability & Logging
+
+- [ ] T036 [P] Add structured logging with request correlation IDs in `src/server/agent/`
+- [ ] T037 [P] Add metrics for stream gap measurement (logging timestamps between chunks)
+- [ ] T038 [P] Add agent routing decision logging in `src/server/agent/router.py`
+
+### Security
+
+- [ ] T035 Security: audit tool definitions for safe execution ✅ DONE (no file system/network access in tools)
+
+### Performance
+
+- [ ] T033 Performance: measure stream gap during tool calls, target <200ms
+- [ ] T039 [P] Benchmark tool call overhead with and without streaming
+
+### Integration & Cleanup
+
 - [x] T031 [P] Update `docs/agent-layer.md` with architecture overview ✅ DONE
 - [ ] T032 Code cleanup and refactoring of agent module
-- [ ] T033 Performance: measure stream gap during tool calls, target <200ms
 - [ ] T034 [P] Add integration tests in `tests/integration/test_agent_layer.py`
-- [ ] T035 Security: audit tool definitions for safe execution
 
 ---
 
@@ -128,14 +143,14 @@
 - **Setup (Phase 1)**: ✅ Complete
 - **Foundational (Phase 2)**: ✅ Complete - BLOCKS all user stories
 - **User Stories (Phase 3-6)**: ✅ Complete
-- **Polish (Final Phase)**: In Progress - T031 done
+- **Polish (Phase 7)**: In Progress - T031, T035 done
 
 ### User Story Dependencies
 
 - **User Story 1 (P1)**: ✅ Complete
 - **User Story 2 (P2)**: ✅ Complete
-- **User Story 3 (P3)**: ⚠️ Implementation done (T022-T025), T026 test pending
-- **User Story 4 (P1)**: ⚠️ Implementation done (T027-T029), T030 test pending
+- **User Story 3 (P3)**: ✅ Complete (T022-T026 all done)
+- **User Story 4 (P1)**: ✅ Complete (T027-T030 all done)
 
 ### Within Each User Story
 
@@ -176,9 +191,9 @@
 | Phase 4: US2 | T017-T021 | ✅ Complete |
 | Phase 5: US3 | T022-T026 | ✅ Complete |
 | Phase 6: US4 | T027-T030 | ✅ Complete |
-| Phase 7: Polish | T031-T035 | 1/5 done (T032-T035 pending) |
+| Phase 7: Polish | T031-T039 | 2/9 done (T032-T034, T036-T039 pending) |
 
-**Total**: 35 tasks  
-**Completed**: 31 tasks  
-**Pending**: 4 tasks (T032-T035)  
+**Total**: 39 tasks  
+**Completed**: 33 tasks  
+**Pending**: 6 tasks (T032-T034, T036-T039)  
 **MVP Scope**: Phase 2 + Phase 3 (T004-T016) = ✅ Complete
