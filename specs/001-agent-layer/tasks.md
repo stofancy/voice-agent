@@ -86,9 +86,9 @@
 - [x] T023 [US3] Create `src/server/agent/query_agent.py` extending BaseAgent with query tools
 - [x] T024 [US3] Create `src/server/agent/router.py` with intent classification (keyword-based)
 - [x] T025 [US3] Add routing decision logging in router.py
-- [ ] T026 [US3] Test: verify booking intent → BookingAgent, query intent → QueryAgent
+- [x] T026 [US3] Test: verify booking intent → BookingAgent, query intent → QueryAgent ✅ DONE
 
-**Checkpoint**: ⚠️ T026 pending - routing implementation done, integration test needed
+**Checkpoint**: ✅ User Story 3 complete - routing tests written
 
 ---
 
@@ -174,11 +174,11 @@
 | Phase 2: Foundational | T004-T010 | ✅ Complete |
 | Phase 3: US1 | T011-T016 | ✅ Complete |
 | Phase 4: US2 | T017-T021 | ✅ Complete |
-| Phase 5: US3 | T022-T026 | 4/5 done (T026 test pending) |
+| Phase 5: US3 | T022-T026 | ✅ Complete |
 | Phase 6: US4 | T027-T030 | 3/4 done (T030 test pending) |
 | Phase 7: Polish | T031-T035 | 1/5 done (T032-T035 pending) |
 
 **Total**: 35 tasks  
-**Completed**: 29 tasks  
-**Pending**: 6 tasks (T026, T030, T032-T035)  
+**Completed**: 30 tasks  
+**Pending**: 5 tasks (T030, T032-T035)  
 **MVP Scope**: Phase 2 + Phase 3 (T004-T016) = ✅ Complete
