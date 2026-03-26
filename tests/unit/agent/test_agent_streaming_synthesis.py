@@ -4,7 +4,6 @@ Tests for AgentStreamingSynthesis.
 Verifies that agent events are properly streamed to TTS without blocking.
 """
 
-import asyncio
 import pytest
 
 try:

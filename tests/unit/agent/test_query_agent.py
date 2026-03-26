@@ -36,10 +36,7 @@ class TestQueryAgent:
 
     def test_agent_has_query_tools(self):
         """QueryAgent has query tools configured."""
-        from src.server.agent.tools.query_tool import get_query_tools
-
         agent = QueryAgent(llm=None)
-        expected_tools = get_query_tools()
         tool_names = {t["name"] for t in agent._tools}
 
         assert "get_weather" in tool_names

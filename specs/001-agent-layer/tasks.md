@@ -103,9 +103,9 @@
 - [x] T027 [P] [US6] Add cancellation token to TurnContext in `src/server/turn_context.py` ✅ Already implemented
 - [x] T028 [US6] Implement tool call cancellation in StreamController (check is_cancelled before emitting) ✅ Already implemented
 - [x] T029 [US6] Add TTS fallback text "Sorry, let me start over" on interruption ✅ DONE
-- [ ] T030 [US6] Test: speak during tool execution, verify new request processed
+- [x] T030 [US6] Test: speak during tool execution, verify new request processed ✅ DONE
 
-**Checkpoint**: ⚠️ T030 pending - interruption handling implemented, test needed
+**Checkpoint**: ✅ User Story 4 complete - interruption tests written
 
 ---
 
@@ -175,10 +175,10 @@
 | Phase 3: US1 | T011-T016 | ✅ Complete |
 | Phase 4: US2 | T017-T021 | ✅ Complete |
 | Phase 5: US3 | T022-T026 | ✅ Complete |
-| Phase 6: US4 | T027-T030 | 3/4 done (T030 test pending) |
+| Phase 6: US4 | T027-T030 | ✅ Complete |
 | Phase 7: Polish | T031-T035 | 1/5 done (T032-T035 pending) |
 
 **Total**: 35 tasks  
-**Completed**: 30 tasks  
-**Pending**: 5 tasks (T030, T032-T035)  
+**Completed**: 31 tasks  
+**Pending**: 4 tasks (T032-T035)  
 **MVP Scope**: Phase 2 + Phase 3 (T004-T016) = ✅ Complete
