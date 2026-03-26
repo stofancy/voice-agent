@@ -6,17 +6,13 @@ without blocking the LLM stream.
 """
 
 import asyncio
-from typing import Any, AsyncGenerator, Dict, List, Optional
+from typing import Any, AsyncGenerator, Dict, List
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
 
 from .events import (
-    AgentStartEvent,
-    AgentCompleteEvent,
-    StreamChunkEvent,
     ToolStartEvent,
-    ToolProgressEvent,
     ToolCompleteEvent,
     ToolErrorEvent,
 )

@@ -6,11 +6,8 @@ Specialized agent for hotel and flight booking with hotel tools.
 
 from typing import AsyncGenerator, Dict, List, Optional
 
-from .base import BaseAgent, AgentEvent
+from .base import AgentEvent
 from .events import (
-    StreamChunkEvent,
-    ToolStartEvent,
-    ToolCompleteEvent,
     AgentStartEvent,
     AgentCompleteEvent,
 )

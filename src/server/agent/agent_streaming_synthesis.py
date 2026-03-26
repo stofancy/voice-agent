@@ -8,13 +8,12 @@ providing non-blocking tool execution with continuous audio output.
 import asyncio
 import time
 from dataclasses import dataclass
-from typing import Optional, TYPE_CHECKING, AsyncGenerator
+from typing import Optional, TYPE_CHECKING
 
 from loguru import logger
 
 if TYPE_CHECKING:
     from .base import BaseAgent
-    from .events import AgentEvent, StreamChunkEvent
     from turn_context import TurnContext
 
 
