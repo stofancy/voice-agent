@@ -4,7 +4,6 @@ Agent Router for Voice Agent.
 Routes user requests to appropriate specialized agents based on intent classification.
 """
 
-import re
 from typing import Optional, Tuple
 from loguru import logger
 

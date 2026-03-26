@@ -4,9 +4,7 @@ Agent factory for creating configured agents.
 Provides factory methods for creating agents with proper tool configurations.
 """
 
-from typing import List, Optional
 
-from .base import BaseAgent
 from .langchain_agent import LangChainAgent
 from .tools.dummy_tool import get_dummy_tools
 from .tools.query_tool import get_query_tools
