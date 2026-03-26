@@ -11,12 +11,11 @@ from .events import StreamChunkEvent, ToolStartEvent, ToolCompleteEvent
 
 
 TOOL_PROGRESS_MESSAGES = {
-    "search": "Searching...",
-    "hotel": "Finding hotels for you...",
-    "book": "Processing your booking...",
-    "weather": "Checking the weather...",
+    "search_hotels": "Searching for hotels...",
+    "book_hotel": "Processing your booking...",
+    "get_weather": "Checking the weather...",
     "echo": "Processing...",
-    "default": "Please wait...",
+    "default": "One moment please...",
 }
 
 
@@ -49,10 +48,8 @@ class LangChainAgent(BaseAgent):
 
     def _get_progress_message(self, tool_name: str) -> str:
         """Get appropriate progress message for tool."""
-        tool_lower = tool_name.lower()
-        for key, msg in TOOL_PROGRESS_MESSAGES.items():
-            if key in tool_lower:
-                return msg
+        if tool_name in TOOL_PROGRESS_MESSAGES:
+            return TOOL_PROGRESS_MESSAGES[tool_name]
         return TOOL_PROGRESS_MESSAGES["default"]
 
     async def astream(
