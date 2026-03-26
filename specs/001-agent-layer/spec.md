@@ -113,3 +113,71 @@ As a user, I want to interrupt the agent at any time so I can correct or change 
 - LangChain Agents provides agent scaffolding with custom stream handling
 - WebSocket message types can be extended but not removed
 - Session state is ephemeral (no persistence across server restarts)
+
+## Implementation Details
+
+### Intent Classification (FR-005)
+
+Intent classification uses **keyword-based routing**:
+
+| Keyword Pattern | Routes To |
+|----------------|-----------|
+| `book`, `hotel`, `flight`, `reserve`, `room`, `booking` | BookingAgent |
+| `weather`, `search`, `find`, `what`, `who`, `when`, `where`, `how`, `time`, `information`, `look up`, `check` | QueryAgent |
+| No match | Default: BookingAgent (fallback) |
+
+**Note**: Keyword scoring sums matches per category. Higher score wins. Ties broken by category priority (booking > query).
+
+### Routing Failure Behavior (Edge Case)
+
+When no agent matches:
+1. If `booking_agent` is configured → route to BookingAgent (default fallback)
+2. Else if `query_agent` is configured → route to QueryAgent
+3. Else → raise `ValueError("No agents configured for routing")`
+
+### Tool Execution
+
+**Timeouts**:
+- Default tool timeout: 30 seconds
+- Tools that exceed timeout emit `tool_error` event and return timeout message
+
+**Retry**: No automatic retry. Tool failure emits `tool_error` event; user can re-request.
+
+### LangChain Agent Limitations
+
+- `astream_events()` provides non-blocking token emission
+- Tool execution within LangChain Agent may block LLM stream if tool is synchronous
+- Solution: Use async tools where possible; StreamController intercepts and emits without blocking
+- Stream gap target (<200ms) achievable with async tool implementations
+
+### WebSocket Event Payload (FR-003)
+
+Events emitted during tool lifecycle:
+
+```json
+{
+  "type": "tool_start|tool_progress|tool_complete|tool_error",
+  "tool_name": "string",
+  "data": {} | "string",
+  "timestamp": "ISO8601"
+}
+```
+
+### Interruption Behavior (FR-007)
+
+On user interruption:
+1. `TurnContext.cancelled` Event is set
+2. StreamController checks `is_cancelled()` before emitting
+3. TTS receives fallback: "Sorry, let me start over."
+4. Stream terminates gracefully
+
+### Progress Messages (FR-002)
+
+During long tool calls, TTS speaks progress messages:
+
+| Tool Type | Progress Message |
+|-----------|-----------------|
+| `search_hotels` | "Searching for hotels..." |
+| `book_hotel` | "Processing your booking..." |
+| `get_weather` | "Checking the weather..." |
+| Default | "One moment please..." |
