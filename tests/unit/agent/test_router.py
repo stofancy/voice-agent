@@ -153,3 +153,110 @@ class TestAgentRouter:
 
         assert router._booking_agent is new_booking
         assert router._query_agent is mock_query
+
+
+@pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
+class TestRouterWithRealAgents:
+    """Integration tests for AgentRouter with real BookingAgent and QueryAgent."""
+
+    def test_booking_intent_routes_to_booking_agent(self):
+        """T026: Booking intent routes to BookingAgent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("I want to book a hotel for tomorrow")
+        assert result is booking_agent
+        assert result.agent_type == "booking"
+
+    def test_query_intent_routes_to_query_agent(self):
+        """T026: Query intent routes to QueryAgent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("What's the weather in Tokyo?")
+        assert result is query_agent
+        assert result.agent_type == "query"
+
+    def test_reserve_routes_to_booking(self):
+        """T026: 'Reserve' keyword routes to booking agent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("Reserve a room at the Grand Hotel")
+        assert result is booking_agent
+        assert result.agent_type == "booking"
+
+    def test_find_routes_to_query(self):
+        """T026: 'Find' keyword routes to query agent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("Find information about Paris")
+        assert result is query_agent
+        assert result.agent_type == "query"
+
+    def test_hotel_keyword_routes_to_booking(self):
+        """T026: 'Hotel' keyword routes to booking agent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("I need a hotel near the beach")
+        assert result is booking_agent
+        assert result.agent_type == "booking"
+
+    def test_time_query_routes_to_query(self):
+        """T026: Time-related query routes to query agent."""
+        from src.server.agent import create_booking_agent, create_query_agent
+        from src.server.agent.router import AgentRouter
+
+        booking_agent = create_booking_agent(llm=None)
+        query_agent = create_query_agent(llm=None)
+
+        router = AgentRouter(
+            booking_agent=booking_agent,
+            query_agent=query_agent,
+        )
+
+        result = router.route("What time is it in London?")
+        assert result is query_agent
+        assert result.agent_type == "query"
