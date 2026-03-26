@@ -16,15 +16,15 @@ from .events import (
     AgentCompleteEvent,
 )
 from .langchain_agent import LangChainAgent
+from .router import AgentRouter
+from .query_agent import QueryAgent
+from .booking_agent import BookingAgent
 
 try:
     from .stream_controller import StreamController
     from .llm_factory import LangChainLLMWrapper, create_langchain_llm
     from .factory import create_query_agent, create_booking_agent, create_default_agent
     from .agent_streaming_synthesis import AgentStreamingSynthesis, AgentSynthesisConfig
-    from .router import AgentRouter
-    from .query_agent import QueryAgent
-    from .booking_agent import BookingAgent
 
     LANGCHAIN_AVAILABLE = True
 except ImportError:
@@ -38,9 +38,6 @@ except ImportError:
     LangChainAgent = None
     AgentStreamingSynthesis = None
     AgentSynthesisConfig = None
-    AgentRouter = None
-    QueryAgent = None
-    BookingAgent = None
 
 __all__ = [
     "BaseAgent",
