@@ -181,3 +181,75 @@ During long tool calls, TTS speaks progress messages:
 | `book_hotel` | "Processing your booking..." |
 | `get_weather` | "Checking the weather..." |
 | Default | "One moment please..." |
+
+### Agent Tool Definitions
+
+**BookingAgent Tools**:
+- `search_hotels(location, date)`: Search available hotels
+- `book_hotel(hotel_id, guest_name)`: Book a hotel room
+
+**QueryAgent Tools**:
+- `get_weather(location)`: Get weather for location
+- `web_search(query)`: Search the web
+- `get_time(timezone)`: Get current time
+
+**Flight Booking**: Not in current scope (v1).
+
+### Conversation Context (FR-006)
+
+- Conversation history maintained per session in `TurnContext`
+- Format: List of `{role, content}` messages
+- Maximum history: 50 turns per session
+- Context passed to agent on each `ainvoke()`/`astream()`
+
+### Agent Factory
+
+Agents created via factory functions:
+- `create_booking_agent(llm, stream_controller=None)` → BookingAgent
+- `create_query_agent(llm, stream_controller=None)` → QueryAgent
+- `create_default_agent(llm, stream_controller=None)` → DefaultAgent
+
+Factory returns configured LangChainAgent with appropriate tools and prompts.
+
+### Streaming Behavior
+
+**Buffer Management**:
+- TTS stream uses internal 240ms buffer (sample_rate 24000)
+- Sentence boundaries trigger buffer flush
+
+**Backpressure**:
+- If TTS consumer slow, audio chunks queue
+- Queue max: 10 chunks before backpressure signal
+
+**Non-Blocking Definition**:
+- "Non-blocking" means: LLM tokens emit immediately via `astream_events()`
+- Tool execution runs async; StreamController emits progress without waiting
+
+**Concurrent Tools**:
+- Single tool per turn (v1)
+- Multi-tool concurrency not supported
+
+### Routing Test Scenarios
+
+| Scenario | Input | Expected Agent |
+|----------|-------|----------------|
+| Book hotel | "I want to book a hotel" | BookingAgent |
+| Weather query | "What's the weather?" | QueryAgent |
+| Time query | "What time is it?" | QueryAgent |
+| Web search | "Search for news" | QueryAgent |
+| Flight booking | "Book a flight" | BookingAgent |
+
+### Edge Cases
+
+**Ambiguous Intent** (booking + query keywords):
+- Higher keyword count wins
+- Tie → BookingAgent preferred
+
+**No Matching Agent**:
+- Fallback chain: BookingAgent → QueryAgent → ValueError
+
+**Human Handoff**: Not in v1 scope.
+
+### Chrome MCP Considerations
+
+Chrome MCP integration not in v1 scope.
