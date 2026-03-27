@@ -56,9 +56,9 @@ fi
 echo "🔌 Activating virtual environment..."
 source .venv/bin/activate
 
-# Install dependencies
+# Install dependencies (modern pyproject.toml)
 echo "📥 Installing dependencies..."
-pip install -q -r requirements.txt
+pip install -q -e .
 echo "✅ Dependencies installed"
 echo ""
 

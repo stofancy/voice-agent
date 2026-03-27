@@ -268,7 +268,7 @@ Common issues, solutions, and how to debug problems with OpenClaw agents.
 - [ ] Memory backend responds? Check connectivity and TTL
 - [ ] Network connectivity? Ping gateway service
 - [ ] Configuration correct? Verify all env vars are set
-- [ ] Dependencies installed? Run `pip install -r requirements.txt`
+- [ ] Dependencies installed? Run `pip install -e ".[dev]"`
 - [ ] Service restarted? Try restarting gateway after changes
 - [ ] Permissions correct? Check file/directory permissions
 

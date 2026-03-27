@@ -127,9 +127,3 @@ As a user, I want to interrupt the agent at any time so I can correct or change 
 - LangChain Agents provides agent scaffolding with custom stream handling
 - WebSocket message types can be extended but not removed
 - Session state is ephemeral (no persistence across server restarts)
-- LangChain Agent limitations:
-  - `astream_events()` emits events with ~50-100ms latency overhead per event
-  - Tool execution is sequential within a single agent turn (ReAct loop)
-  - Long tool execution (>30s) requires explicit timeout handling
-- Chrome MCP integration: browser automation tools are out-of-scope for v1
-- Tool retry: failed tools are NOT retried automatically; user receives error and decides
