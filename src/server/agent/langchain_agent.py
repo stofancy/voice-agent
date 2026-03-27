@@ -4,10 +4,11 @@ LangChain Agent wrapper for Voice Agent.
 Wraps LangChain agent with astream_events() for non-blocking tool execution.
 """
 
+import asyncio
 from typing import AsyncGenerator, Dict, List, Any, Optional
 
 from .base import BaseAgent, AgentEvent
-from .events import StreamChunkEvent, ToolStartEvent, ToolCompleteEvent
+from .events import StreamChunkEvent, ToolStartEvent, ToolCompleteEvent, ToolErrorEvent, ToolProgressEvent
 
 
 TOOL_PROGRESS_MESSAGES = {
@@ -17,6 +18,12 @@ TOOL_PROGRESS_MESSAGES = {
     "echo": "Processing...",
     "default": "One moment please...",
 }
+
+TOOL_TIMEOUT_SECONDS = 30.0
+TOOL_PROGRESS_INTERVAL_SECONDS = 0.5
+
+FALLBACK_TIMEOUT_MESSAGE = "Sorry, the request timed out. Would you like me to try again?"
+FALLBACK_ERROR_MESSAGE = "Sorry, something went wrong. Please try again."
 
 
 class LangChainAgent(BaseAgent):
@@ -35,6 +42,7 @@ class LangChainAgent(BaseAgent):
         stream_controller=None,
         system_prompt: Optional[str] = None,
         agent_executor: Any = None,
+        tool_timeout: float = TOOL_TIMEOUT_SECONDS,
     ):
         """
         Initialize LangChainAgent.
@@ -46,6 +54,7 @@ class LangChainAgent(BaseAgent):
             stream_controller: Optional StreamController for TTS
             system_prompt: Optional system prompt - used if agent_executor not provided
             agent_executor: Pre-created LangChain AgentExecutor (takes precedence)
+            tool_timeout: Timeout for tool execution in seconds (default 30s)
         """
         self._agent_type = agent_type
         self._llm = llm
@@ -54,6 +63,7 @@ class LangChainAgent(BaseAgent):
         self._system_prompt = system_prompt or "You are a helpful voice assistant."
         self._conversation_history: List[Dict[str, str]] = []
         self._agent_executor = agent_executor
+        self._tool_timeout = tool_timeout
 
     @property
     def agent_type(self) -> str:
@@ -69,6 +79,28 @@ class LangChainAgent(BaseAgent):
         if tool_name in TOOL_PROGRESS_MESSAGES:
             return TOOL_PROGRESS_MESSAGES[tool_name]
         return TOOL_PROGRESS_MESSAGES["default"]
+
+    async def _emit_periodic_progress(
+        self,
+        tool_name: str,
+        stop_event: asyncio.Event,
+        event_queue: asyncio.Queue,
+    ) -> None:
+        """Background task that emits progress every 500ms while tool runs."""
+        try:
+            while not stop_event.is_set():
+                await asyncio.sleep(TOOL_PROGRESS_INTERVAL_SECONDS)
+                if self._stream_controller and not stop_event.is_set():
+                    await self._stream_controller.emit_progress(
+                        self._get_progress_message(tool_name)
+                    )
+                # Also put progress event in queue for stream consumers
+                if not stop_event.is_set():
+                    event_queue.put_nowait(
+                        ToolProgressEvent(tool_name=tool_name, status="progress")
+                    )
+        except asyncio.CancelledError:
+            pass
 
     async def astream(
         self,
@@ -87,6 +119,27 @@ class LangChainAgent(BaseAgent):
         if not using_provided_history:
             messages.append({"role": "user", "content": input_text})
 
+        # Event queue for coordinating with background tasks
+        event_queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
+        tool_stop_event: Optional[asyncio.Event] = None
+        progress_task: Optional[asyncio.Task] = None
+        timeout_task: Optional[asyncio.Task] = None
+        current_tool_name: Optional[str] = None
+        tool_start_time: Optional[float] = None
+
+        async def emit_timeout():
+            """Background task that fires on tool timeout."""
+            try:
+                await asyncio.sleep(self._tool_timeout)
+                # Timeout fired - tool is still running
+                if self._stream_controller:
+                    await self._stream_controller.emit_progress(FALLBACK_TIMEOUT_MESSAGE)
+                event_queue.put_nowait(
+                    ToolErrorEvent(tool_name=current_tool_name or "unknown", error="timeout")
+                )
+            except asyncio.CancelledError:
+                pass
+
         try:
             if self._agent_executor is not None:
                 # Use pre-created agent executor
@@ -102,7 +155,18 @@ class LangChainAgent(BaseAgent):
 
                     elif event_type == "on_tool_start":
                         tool_name = event.get("name", "unknown")
+                        current_tool_name = tool_name
+                        tool_start_time = asyncio.get_running_loop().time()
                         yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
+
+                        # Start periodic progress emission
+                        tool_stop_event = asyncio.Event()
+                        progress_task = asyncio.create_task(
+                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue)
+                        )
+                        # Start timeout handler
+                        timeout_task = asyncio.create_task(emit_timeout())
+                        # Emit initial progress
                         if self._stream_controller:
                             await self._stream_controller.emit_progress(
                                 self._get_progress_message(tool_name)
@@ -111,7 +175,30 @@ class LangChainAgent(BaseAgent):
                     elif event_type == "on_tool_end":
                         tool_name = event.get("name", "unknown")
                         output = event.get("data", {}).get("output", {})
+
+                        # Cancel progress and timeout tasks
+                        if progress_task:
+                            progress_task.cancel()
+                            progress_task = None
+                        if timeout_task:
+                            timeout_task.cancel()
+                            timeout_task = None
+                        if tool_stop_event:
+                            tool_stop_event.set()
+                            tool_stop_event = None
+
+                        current_tool_name = None
+                        tool_start_time = None
+
                         yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
+
+                    # Check event queue for timeout/progress events
+                    try:
+                        while not event_queue.empty():
+                            yield event_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+
             else:
                 # Fallback: use LLM directly (legacy path)
                 async for event in self._llm.astream_events({"messages": messages}):
@@ -124,7 +211,18 @@ class LangChainAgent(BaseAgent):
 
                     elif event_type == "on_tool_start":
                         tool_name = event.get("name", "unknown")
+                        current_tool_name = tool_name
+                        tool_start_time = asyncio.get_running_loop().time()
                         yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
+
+                        # Start periodic progress emission
+                        tool_stop_event = asyncio.Event()
+                        progress_task = asyncio.create_task(
+                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue)
+                        )
+                        # Start timeout handler
+                        timeout_task = asyncio.create_task(emit_timeout())
+                        # Emit initial progress
                         if self._stream_controller:
                             await self._stream_controller.emit_progress(
                                 self._get_progress_message(tool_name)
@@ -133,9 +231,43 @@ class LangChainAgent(BaseAgent):
                     elif event_type == "on_tool_end":
                         tool_name = event.get("name", "unknown")
                         output = event.get("data", {}).get("output", {})
+
+                        # Cancel progress and timeout tasks
+                        if progress_task:
+                            progress_task.cancel()
+                            progress_task = None
+                        if timeout_task:
+                            timeout_task.cancel()
+                            timeout_task = None
+                        if tool_stop_event:
+                            tool_stop_event.set()
+                            tool_stop_event = None
+
+                        current_tool_name = None
+                        tool_start_time = None
+
                         yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
 
+                    # Check event queue for timeout/progress events
+                    try:
+                        while not event_queue.empty():
+                            yield event_queue.get_nowait()
+                    except asyncio.QueueEmpty:
+                        pass
+
+        except asyncio.TimeoutError:
+            # Handle timeout during LLM streaming (less common)
+            if self._stream_controller:
+                await self._stream_controller.emit_progress(FALLBACK_TIMEOUT_MESSAGE)
+            yield ToolErrorEvent(tool_name=current_tool_name or "unknown", error="timeout")
         finally:
+            # Cleanup tasks
+            if progress_task:
+                progress_task.cancel()
+            if timeout_task:
+                timeout_task.cancel()
+            if tool_stop_event:
+                tool_stop_event.set()
             # Only append to instance history if we created it locally
             if not using_provided_history:
                 self._conversation_history.append({"role": "user", "content": input_text})
