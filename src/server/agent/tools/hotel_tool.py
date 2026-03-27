@@ -4,24 +4,35 @@ Hotel booking tools for Voice Agent.
 Provides tools for searching and booking hotels.
 """
 
-from typing import Dict, Any
+import json
 from datetime import datetime, timedelta
 
+from langchain_core.tools import tool
 
-async def search_hotels(input_data: Dict[str, Any]) -> Dict[str, Any]:
+
+@tool
+async def search_hotels(
+    location: str = "any",
+    checkin: str = None,
+    checkout: str = None,
+    guests: int = 1,
+) -> str:
     """
     Search for available hotels.
 
     Args:
-        input_data: Dict with optional 'location', 'checkin', 'checkout', 'guests'
+        location: City or area to search for hotels
+        checkin: Check-in date in YYYY-MM-DD format (defaults to tomorrow)
+        checkout: Check-out date in YYYY-MM-DD format (defaults to day after tomorrow)
+        guests: Number of guests (defaults to 1)
 
     Returns:
-        Dict with 'hotels' list
+        JSON string with list of available hotels
     """
-    location = input_data.get("location", "any")
-    checkin = input_data.get("checkin", (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
-    checkout = input_data.get("checkout", (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d"))
-    guests = input_data.get("guests", 1)
+    if checkin is None:
+        checkin = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+    if checkout is None:
+        checkout = (datetime.now() + timedelta(days=2)).strftime("%Y-%m-%d")
 
     hotels = [
         {
@@ -42,33 +53,38 @@ async def search_hotels(input_data: Dict[str, Any]) -> Dict[str, Any]:
         },
     ]
 
-    return {
+    result = {
         "hotels": hotels,
         "checkin": checkin,
         "checkout": checkout,
         "guests": guests,
         "count": len(hotels),
     }
+    return json.dumps(result)
 
 
-async def book_hotel(input_data: Dict[str, Any]) -> Dict[str, Any]:
+@tool
+async def book_hotel(
+    hotel_id: str,
+    guest_name: str,
+    checkin: str = None,
+    checkout: str = None,
+) -> str:
     """
     Book a hotel room.
 
     Args:
-        input_data: Dict with 'hotel_id', 'guest_name', 'checkin', 'checkout'
+        hotel_id: ID of the hotel to book
+        guest_name: Name of the guest for the booking
+        checkin: Check-in date in YYYY-MM-DD format
+        checkout: Check-out date in YYYY-MM-DD format
 
     Returns:
-        Dict with 'booking_id', 'confirmation'
+        JSON string with booking confirmation details
     """
-    hotel_id = input_data.get("hotel_id")
-    guest_name = input_data.get("guest_name", "Guest")
-    checkin = input_data.get("checkin")
-    checkout = input_data.get("checkout")
-
     booking_id = f"BK{int(datetime.now().timestamp())}"
 
-    return {
+    result = {
         "booking_id": booking_id,
         "hotel_id": hotel_id,
         "guest_name": guest_name,
@@ -77,19 +93,9 @@ async def book_hotel(input_data: Dict[str, Any]) -> Dict[str, Any]:
         "confirmation": f"Your booking {booking_id} is confirmed for {guest_name}.",
         "status": "confirmed",
     }
+    return json.dumps(result)
 
 
 def get_hotel_tools():
     """Return list of hotel tools for LangChain agent."""
-    return [
-        {
-            "name": "search_hotels",
-            "description": "Search for available hotels. Input should include location, checkin date, checkout date, and number of guests.",
-            "function": search_hotels,
-        },
-        {
-            "name": "book_hotel",
-            "description": "Book a hotel room. Input should include hotel_id, guest_name, checkin date, and checkout date.",
-            "function": book_hotel,
-        },
-    ]
+    return [search_hotels, book_hotel]

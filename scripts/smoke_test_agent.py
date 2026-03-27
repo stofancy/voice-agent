@@ -11,6 +11,7 @@ Usage:
 """
 
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -174,31 +175,37 @@ async def test_agent_router() -> bool:
 
 
 async def test_tool_functions() -> bool:
-    """Test tool functions directly."""
+    """Test tool functions via LangChain invoke interface."""
     print(f"\n{Colors.BLUE}[4] Testing Tool Functions...{Colors.RESET}")
 
     from src.server.agent.tools.query_tool import get_weather, web_search, get_time
     from src.server.agent.tools.hotel_tool import search_hotels, book_hotel
 
-    result = await get_weather({"location": "Beijing"})
-    print_test("get_weather returns dict", isinstance(result, dict))
-    print_test("get_weather has temperature", "temperature" in result)
+    # Test using LangChain tool.invoke() interface
+    result = await get_weather.ainvoke({"location": "Beijing"})
+    result_dict = json.loads(result)
+    print_test("get_weather returns JSON string", isinstance(result, str))
+    print_test("get_weather parsed has temperature", "temperature" in result_dict)
 
-    result = await web_search({"query": "test"})
-    print_test("web_search returns dict", isinstance(result, dict))
-    print_test("web_search has results", "results" in result)
+    result = await web_search.ainvoke({"query": "test"})
+    result_dict = json.loads(result)
+    print_test("web_search returns JSON string", isinstance(result, str))
+    print_test("web_search has results", "results" in result_dict)
 
-    result = await get_time({"timezone": "UTC"})
-    print_test("get_time returns dict", isinstance(result, dict))
-    print_test("get_time has time", "time" in result)
+    result = await get_time.ainvoke({"timezone": "UTC"})
+    result_dict = json.loads(result)
+    print_test("get_time returns JSON string", isinstance(result, str))
+    print_test("get_time has time", "time" in result_dict)
 
-    result = await search_hotels({"location": "Tokyo"})
-    print_test("search_hotels returns dict", isinstance(result, dict))
-    print_test("search_hotels has hotels", "hotels" in result)
+    result = await search_hotels.ainvoke({"location": "Tokyo"})
+    result_dict = json.loads(result)
+    print_test("search_hotels returns JSON string", isinstance(result, str))
+    print_test("search_hotels has hotels", "hotels" in result_dict)
 
-    result = await book_hotel({"hotel_id": "h1", "guest_name": "Test"})
-    print_test("book_hotel returns dict", isinstance(result, dict))
-    print_test("book_hotel has booking_id", "booking_id" in result)
+    result = await book_hotel.ainvoke({"hotel_id": "h1", "guest_name": "Test", "checkin": "2026-04-01", "checkout": "2026-04-02"})
+    result_dict = json.loads(result)
+    print_test("book_hotel returns JSON string", isinstance(result, str))
+    print_test("book_hotel has booking_id", "booking_id" in result_dict)
 
     return True
 
@@ -264,7 +271,7 @@ async def test_langchain_integration() -> bool:
 
 
 async def test_tool_definitions() -> bool:
-    """Test that tool definitions are properly structured."""
+    """Test that tool definitions are properly structured as LangChain tools."""
     print(f"\n{Colors.BLUE}[7] Testing Tool Definitions...{Colors.RESET}")
 
     from src.server.agent.tools.query_tool import get_query_tools
@@ -274,7 +281,7 @@ async def test_tool_definitions() -> bool:
     print_test("Query tools returns list", isinstance(query_tools, list))
     print_test("Query tools has 3 tools", len(query_tools) == 3)
 
-    tool_names = {t["name"] for t in query_tools}
+    tool_names = {t.name for t in query_tools}
     print_test("get_weather in tools", "get_weather" in tool_names)
     print_test("web_search in tools", "web_search" in tool_names)
     print_test("get_time in tools", "get_time" in tool_names)
@@ -283,15 +290,15 @@ async def test_tool_definitions() -> bool:
     print_test("Hotel tools returns list", isinstance(hotel_tools, list))
     print_test("Hotel tools has 2 tools", len(hotel_tools) == 2)
 
-    tool_names = {t["name"] for t in hotel_tools}
+    tool_names = {t.name for t in hotel_tools}
     print_test("search_hotels in tools", "search_hotels" in tool_names)
     print_test("book_hotel in tools", "book_hotel" in tool_names)
 
     for tool in query_tools + hotel_tools:
-        has_name = "name" in tool
-        has_desc = "description" in tool
-        has_func = "function" in tool
-        print_test(f"Tool {tool['name']} complete", has_name and has_desc and has_func)
+        has_name = hasattr(tool, 'name') and tool.name
+        has_desc = hasattr(tool, 'description') and tool.description
+        has_invoke = callable(tool.invoke)
+        print_test(f"Tool {tool.name} complete", has_name and has_desc and has_invoke)
 
     return True
 

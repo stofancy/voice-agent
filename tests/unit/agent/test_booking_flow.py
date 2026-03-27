@@ -4,6 +4,7 @@ Integration tests for booking flow with stream continuity.
 Verifies that TTS continues during tool execution.
 """
 
+import json
 import pytest
 
 try:
@@ -17,29 +18,31 @@ except ImportError:
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
 class TestHotelTools:
-    """Tests for hotel tool functions."""
+    """Tests for hotel tool functions using LangChain @tool format."""
 
     @pytest.mark.asyncio
-    async def test_search_hotels_returns_list(self):
-        """search_hotels returns a list of hotels."""
-        result = await search_hotels({"location": "NYC"})
+    async def test_search_hotels_returns_json(self):
+        """search_hotels returns hotel list as JSON string."""
+        result = await search_hotels.ainvoke({"location": "NYC"})
+        result_dict = json.loads(result)
 
-        assert "hotels" in result
-        assert "count" in result
-        assert result["count"] == 2
-        assert len(result["hotels"]) == 2
+        assert "hotels" in result_dict
+        assert "count" in result_dict
+        assert result_dict["count"] == 2
+        assert len(result_dict["hotels"]) == 2
 
     @pytest.mark.asyncio
     async def test_search_hotels_with_defaults(self):
         """search_hotels works with minimal input."""
-        result = await search_hotels({})
+        result = await search_hotels.ainvoke({})
+        result_dict = json.loads(result)
 
-        assert result["hotels"][0]["available"] is True
+        assert result_dict["hotels"][0]["available"] is True
 
     @pytest.mark.asyncio
     async def test_book_hotel_returns_confirmation(self):
         """book_hotel returns booking confirmation."""
-        result = await book_hotel(
+        result = await book_hotel.ainvoke(
             {
                 "hotel_id": "h1",
                 "guest_name": "John Doe",
@@ -47,18 +50,19 @@ class TestHotelTools:
                 "checkout": "2026-04-02",
             }
         )
+        result_dict = json.loads(result)
 
-        assert "booking_id" in result
-        assert result["status"] == "confirmed"
-        assert "John Doe" in result["confirmation"]
+        assert "booking_id" in result_dict
+        assert result_dict["status"] == "confirmed"
+        assert "John Doe" in result_dict["confirmation"]
 
     def test_get_hotel_tools_returns_list(self):
-        """get_hotel_tools returns list of tools."""
+        """get_hotel_tools returns list of LangChain tools."""
         tools = get_hotel_tools()
 
         assert len(tools) == 2
-        assert any(t["name"] == "search_hotels" for t in tools)
-        assert any(t["name"] == "book_hotel" for t in tools)
+        assert any(t.name == "search_hotels" for t in tools)
+        assert any(t.name == "book_hotel" for t in tools)
 
 
 @pytest.mark.skipif(not LANGCHAIN_AVAILABLE, reason="langchain-core not installed")
