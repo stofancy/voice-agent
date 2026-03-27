@@ -85,7 +85,17 @@ Maintains conversation state per session.
 
 ## Validation Rules
 
-1. **StreamController**: `event_queue` max size = 100 (backpressure)
+1. **StreamController**: `event_queue` max size = 100 (backpressure threshold). When exceeded, oldest event is dropped and logged.
 2. **AgentRouter**: At least 1 agent required
-3. **ConversationContext**: `session_id` must be non-empty
-4. **Tool execution**: Timeout = 30s default, configurable
+3. **ConversationContext**: `session_id` must be non-empty; history limited to last 10 turns
+4. **Tool execution**: Timeout = 30s default, configurable per tool. On timeout: emit `tool_error` event.
+5. **Progress messages**: Emitted at tool_start, then every 500ms if tool still running, then at tool_complete.
+
+## Backpressure Handling
+
+When `event_queue` depth > 100:
+1. Log warning with queue depth
+2. Drop oldest event
+3. Continue processing
+
+This ensures stream is never blocked even under high event load.
