@@ -219,13 +219,13 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
   - Convert dict-format tools to `@tool` decorator format per FR-003
   - Affects: `query_tool.py`, `hotel_tool.py`, `dummy_tool.py`
 
-- [ ] T042 [US1] Implement 30s tool timeout mechanism in `src/server/agent/langchain_agent.py`
+- [x] T042 [US1] Implement 30s tool timeout mechanism in `src/server/agent/langchain_agent.py`
   - Per FR-007a/b/c: timeout handling with fallback TTS message
-  - Add `asyncio.timeout` or similar mechanism
+  - Added `emit_timeout()` background task and `tool_timeout` configuration
 
-- [ ] T043 [US1] Implement 500ms progress emit mechanism in `src/server/agent/langchain_agent.py`
+- [x] T043 [US1] Implement 500ms progress emit mechanism in `src/server/agent/langchain_agent.py`
   - Per FR-010: emit at tool_start, then every 500ms if tool still running
-  - Requires background timer/task for periodic emission
+  - Added `_emit_periodic_progress()` background task
 
 ### P1 - High Priority
 
@@ -251,4 +251,4 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
 
 | Phase | Tasks | Status |
 |-------|-------|--------|
-| Phase 8: Bug Fixes | T040-T047 | 5/8 done (T040, T041, T044, T045, T047) |
+| Phase 8: Bug Fixes | T040-T047 | 7/8 done (T040, T041, T042, T043, T044, T045, T047) |
