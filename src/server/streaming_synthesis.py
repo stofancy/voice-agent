@@ -122,7 +122,7 @@ class StreamingSynthesis:
                         await self._ws.send_subtitle_chunk(chunk)
 
                     if need_new_stream:
-                        tts_stream_holder[0] = tts_factory.create_stream()
+                        tts_stream_holder[0] = self._tts.create_stream()
                         tts_stream_holder[0]._ensure_connected()
                         need_new_stream = False
 

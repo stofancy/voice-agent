@@ -6,7 +6,7 @@ without blocking the LLM stream.
 """
 
 import asyncio
-from typing import Any, AsyncGenerator, Dict, List
+from typing import Any, Dict, List
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
@@ -27,7 +27,6 @@ class StreamController(BaseCallbackHandler):
 
     Attributes:
         tts_callback: Callback function to emit TTS text
-        event_queue: Queue for tool events
         is_cancelled: Cancellation flag
     """
 
@@ -40,7 +39,6 @@ class StreamController(BaseCallbackHandler):
         self.ws_callback = ws_callback
         self.is_cancelled = False
         self._current_tool = None
-        self._event_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
 
     def reset(self):
         """Reset state for new conversation."""
@@ -135,12 +133,3 @@ class StreamController(BaseCallbackHandler):
         """Emit progress text to TTS."""
         if self.tts_callback and not self.is_cancelled:
             await self.tts_callback(text)
-
-    async def astream_events(self) -> AsyncGenerator[Dict[str, Any], None]:
-        """Async generator for tool events."""
-        while not self.is_cancelled:
-            try:
-                event = await asyncio.wait_for(self._event_queue.get(), timeout=0.1)
-                yield event
-            except asyncio.TimeoutError:
-                continue

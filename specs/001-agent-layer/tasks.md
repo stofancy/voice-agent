@@ -193,7 +193,62 @@
 | Phase 6: US4 | T027-T030 | ✅ Complete |
 | Phase 7: Polish | T031-T039 | 3/9 done (T033-T034, T036-T039 pending) |
 
-**Total**: 39 tasks  
-**Completed**: 34 tasks  
-**Pending**: 5 tasks (T033-T034, T036-T039)  
+**Total**: 39 tasks
+**Completed**: 34 tasks
+**Pending**: 5 tasks (T033-T034, T036-T039)
 **MVP Scope**: Phase 2 + Phase 3 (T004-T016) = ✅ Complete
+
+---
+
+## Phase 8: Bug Fixes & Spec Compliance (Review Issues)
+
+**Purpose**: Fix critical bugs and spec compliance issues identified during code review
+
+**Status**: In Progress
+
+### Review Issues Reference
+
+See `REVIEW_ISSUES.md` for detailed problem descriptions.
+
+### P0 - Critical (Must Fix)
+
+- [x] T040 [P] Fix `tts_factory` undefined bug in `src/server/streaming_synthesis.py:125`
+  - Change `tts_factory` → `self._tts_factory`
+
+- [ ] T041 [US1] Implement LangChain-compatible Tools format in `src/server/agent/tools/`
+  - Convert dict-format tools to `@tool` decorator format per FR-003
+  - Affects: `query_tool.py`, `hotel_tool.py`, `dummy_tool.py`
+
+- [ ] T042 [US1] Implement 30s tool timeout mechanism in `src/server/agent/langchain_agent.py`
+  - Per FR-007a/b/c: timeout handling with fallback TTS message
+  - Add `asyncio.timeout` or similar mechanism
+
+- [ ] T043 [US1] Implement 500ms progress emit mechanism in `src/server/agent/langchain_agent.py`
+  - Per FR-010: emit at tool_start, then every 500ms if tool still running
+  - Requires background timer/task for periodic emission
+
+### P1 - High Priority
+
+- [x] T044 [P] Fix conversation history double-append bug in `src/server/agent/langchain_agent.py:136,144-145`
+  - Remove duplicate user message append in astream() finally block
+
+- [x] T045 [P] Fix `stream_rdy_output` typo in `src/server/agent/factory.py:52`
+  - Change to correct spelling `stream_rdy_output`
+
+- [ ] T046 [US1] Implement backpressure threshold enforcement in `src/server/streaming_synthesis.py`
+  - Per FR-009: enforce max_depth=100, drop oldest and log
+
+- [x] T047 [P] Remove event_queue dead code in `src/server/agent/stream_controller.py`
+  - Remove unused `self._event_queue = asyncio.Queue(max_depth=100)`
+
+### Dependencies
+
+- T040, T044, T045, T047 can run in parallel (different files)
+- T041, T042, T043, T046 depend on understanding LangChain agent architecture
+- T042 (timeout) requires T043 design consideration
+
+### Task Summary
+
+| Phase | Tasks | Status |
+|-------|-------|--------|
+| Phase 8: Bug Fixes | T040-T047 | 4/8 done (T040, T044, T045, T047) |
