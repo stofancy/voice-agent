@@ -6,12 +6,20 @@ Tests the agent layer components directly without requiring full server.
 
 Usage:
     python scripts/smoke_test_agent.py
+    or
+    python -m pytest tests/unit/agent/ -v
 """
 
 import asyncio
 import sys
+from pathlib import Path
 
-sys.path.insert(0, "src")
+# Resolve project root (parent of scripts/) and add to path
+SCRIPT_DIR = Path(__file__).parent.resolve()
+PROJECT_ROOT = SCRIPT_DIR.parent
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 class Colors:
@@ -202,8 +210,8 @@ async def test_agent_creation() -> bool:
     from src.server.agent import LANGCHAIN_AVAILABLE
 
     if not LANGCHAIN_AVAILABLE:
-        print_test("Agent creation (requires langchain-core)", True, "SKIPPED")
-        return True
+        print_test("Agent creation", False, "SKIPPED - langchain not installed")
+        return False
 
     from src.server.agent import create_query_agent, create_booking_agent, create_default_agent  # noqa: F401
 
@@ -219,9 +227,45 @@ async def test_agent_creation() -> bool:
     return True
 
 
+async def test_langchain_integration() -> bool:
+    """Test LangChain integration with mock LLM."""
+    print(f"\n{Colors.BLUE}[6] Testing LangChain Integration...{Colors.RESET}")
+
+    from src.server.agent import LANGCHAIN_AVAILABLE
+
+    if not LANGCHAIN_AVAILABLE:
+        print_test("LangChain integration", False, "SKIPPED - langchain not installed")
+        return False
+
+    try:
+        from src.server.agent import create_langchain_llm, create_booking_agent, StreamController
+
+        # Create mock LLM that can be wrapped
+        class MockLLM:
+            model_name = "gpt-4"
+            api_key = "test"
+            url = "http://test"
+
+            def as_langchain_llm(self):
+                from langchain_openai import ChatOpenAI
+                return ChatOpenAI(model="gpt-4", api_key="test", base_url="http://test")
+
+        llm = MockLLM()
+        stream_controller = StreamController()
+        booking_agent = create_booking_agent(llm, stream_controller)
+
+        print_test("BookingAgent with LangChain", True)
+        print_test("Has agent_executor", booking_agent.has_agent_executor, f"={booking_agent.has_agent_executor}")
+
+        return True
+    except Exception as e:
+        print_test("LangChain integration", False, str(e))
+        return False
+
+
 async def test_tool_definitions() -> bool:
     """Test that tool definitions are properly structured."""
-    print(f"\n{Colors.BLUE}[6] Testing Tool Definitions...{Colors.RESET}")
+    print(f"\n{Colors.BLUE}[7] Testing Tool Definitions...{Colors.RESET}")
 
     from src.server.agent.tools.query_tool import get_query_tools
     from src.server.agent.tools.hotel_tool import get_hotel_tools
@@ -254,12 +298,12 @@ async def test_tool_definitions() -> bool:
 
 async def test_stream_controller() -> bool:
     """Test StreamController basic functionality."""
-    print(f"\n{Colors.BLUE}[7] Testing StreamController...{Colors.RESET}")
+    print(f"\n{Colors.BLUE}[8] Testing StreamController...{Colors.RESET}")
 
     from src.server.agent import LANGCHAIN_AVAILABLE
 
     if not LANGCHAIN_AVAILABLE:
-        print_test("StreamController (langchain-core not installed)", True, "SKIPPED")
+        print_test("StreamController", True, "SKIPPED - langchain not installed")
         return True
 
     from src.server.agent import StreamController  # noqa: F401
@@ -276,7 +320,7 @@ async def test_stream_controller() -> bool:
 
 async def test_voice_turn_import() -> bool:
     """Test that VoiceTurn can be imported and initialized."""
-    print(f"\n{Colors.BLUE}[8] Testing VoiceTurn...{Colors.RESET}")
+    print(f"\n{Colors.BLUE}[9] Testing VoiceTurn...{Colors.RESET}")
 
     from src.server.voice_turn import VoiceTurn  # noqa: F401
 
@@ -297,6 +341,7 @@ async def run_all_tests() -> bool:
         ("AgentRouter", test_agent_router),
         ("Tool Functions", test_tool_functions),
         ("Agent Creation", test_agent_creation),
+        ("LangChain Integration", test_langchain_integration),
         ("Tool Definitions", test_tool_definitions),
         ("StreamController", test_stream_controller),
         ("VoiceTurn", test_voice_turn_import),
