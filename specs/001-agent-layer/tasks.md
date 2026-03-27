@@ -215,7 +215,7 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
 - [x] T040 [P] Fix `tts_factory` undefined bug in `src/server/streaming_synthesis.py:125`
   - Change `tts_factory` → `self._tts_factory`
 
-- [ ] T041 [US1] Implement LangChain-compatible Tools format in `src/server/agent/tools/`
+- [x] T041 [US1] Implement LangChain-compatible Tools format in `src/server/agent/tools/`
   - Convert dict-format tools to `@tool` decorator format per FR-003
   - Affects: `query_tool.py`, `hotel_tool.py`, `dummy_tool.py`
 
@@ -251,4 +251,4 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
 
 | Phase | Tasks | Status |
 |-------|-------|--------|
-| Phase 8: Bug Fixes | T040-T047 | 4/8 done (T040, T044, T045, T047) |
+| Phase 8: Bug Fixes | T040-T047 | 5/8 done (T040, T041, T044, T045, T047) |
