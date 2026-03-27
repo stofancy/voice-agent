@@ -29,8 +29,8 @@ The E2E test suite measures and logs:
 uv venv .venv
 source .venv/bin/activate  # or .venv\Scripts\activate on Windows
 
-# Install test dependencies
-uv pip install -r requirements.txt pytest pytest-asyncio
+# Install test dependencies (uses modern pyproject.toml)
+uv pip install -e ".[dev]"
 ```
 
 ### Run All E2E Tests
@@ -316,6 +316,5 @@ Example GitHub Actions workflow:
 ## References
 
 - Backend modules: [src/server/](../../src/server/)
-- Requirements: [requirements.txt](../../requirements.txt)
 - Main server: [src/server/main.py](../../src/server/main.py)
 - Config: [pyproject.toml](../../pyproject.toml)

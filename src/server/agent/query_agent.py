@@ -1,7 +1,7 @@
 """
-Booking Agent for Voice Agent.
+Query Agent for Voice Agent.
 
-Specialized agent for hotel and flight booking with hotel tools.
+Specialized agent for information queries like weather and search.
 """
 
 from typing import AsyncGenerator, Dict, List, Optional
@@ -12,25 +12,24 @@ from .events import (
     AgentCompleteEvent,
 )
 from .langchain_agent import LangChainAgent
-from .tools.hotel_tool import get_hotel_tools
+from .tools.query_tool import get_query_tools
 
 
-BOOKING_PROMPT = """You are a voice booking assistant. Help users book hotels and flights.
+QUERY_PROMPT = """You are a voice query assistant. Help users get information about weather, search the web, and answer questions.
 
-For hotels:
-- Ask for location, dates, and guest count
-- Use search_hotels to find options
-- Use book_hotel to confirm booking
-- Confirm all details before booking
+For queries:
+- Use get_weather to check weather for a location
+- Use web_search to find information online
+- Use get_time to check current time
 
-Keep responses concise for voice interaction. Confirm booking reference at the end."""
+Keep responses concise for voice interaction."""
 
 
-class BookingAgent:
+class QueryAgent:
     """
-    Agent specialized in hotel and flight booking.
+    Agent specialized in information queries.
 
-    Uses hotel tools and a ReAct-style prompt for booking flows.
+    Uses query tools (weather, search, time) for information retrieval.
     """
 
     def __init__(
@@ -41,37 +40,37 @@ class BookingAgent:
     ):
         self._llm = llm
         self._stream_controller = stream_controller
-        self._tools = tools or get_hotel_tools()
+        self._tools = tools or get_query_tools()
         self._conversation_history: List[Dict[str, str]] = []
         self._agent = LangChainAgent(
-            agent_type="booking",
+            agent_type="query",
             llm=llm,
             tools=self._tools,
             stream_controller=stream_controller,
-            system_prompt=BOOKING_PROMPT,
+            system_prompt=QUERY_PROMPT,
         )
 
     @property
     def agent_type(self) -> str:
-        return "booking"
+        return "query"
 
     async def astream(
         self,
         input_text: str,
         conversation_history: List[Dict[str, str]] | None = None,
     ) -> AsyncGenerator[AgentEvent, None]:
-        """Stream booking agent response with tool events."""
-        yield AgentStartEvent(agent_type="booking", input_text=input_text)
+        """Stream query agent response with tool events."""
+        yield AgentStartEvent(agent_type="query", input_text=input_text)
 
         async for event in self._agent.astream(input_text, conversation_history):
             yield event
 
-        yield AgentCompleteEvent(agent_type="booking", full_response="")
+        yield AgentCompleteEvent(agent_type="query", full_response="")
 
     async def ainvoke(
         self,
         input_text: str,
         conversation_history: List[Dict[str, str]] | None = None,
     ) -> str:
-        """Invoke booking agent and return complete response."""
+        """Invoke query agent and return complete response."""
         return await self._agent.ainvoke(input_text, conversation_history)

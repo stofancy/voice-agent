@@ -26,8 +26,12 @@ class TestStreamController:
 
     def test_initialization_with_callbacks(self):
         """StreamController accepts optional callbacks."""
-        tts_cb = lambda x: None
-        ws_cb = lambda x: None
+
+        def tts_cb(x):
+            pass
+
+        def ws_cb(x):
+            pass
 
         sc = StreamController(tts_callback=tts_cb, ws_callback=ws_cb)
 
