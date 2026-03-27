@@ -204,7 +204,7 @@
 
 **Purpose**: Fix critical bugs and spec compliance issues identified during code review
 
-**Status**: In Progress
+**Status**: ✅ COMPLETE
 
 ### Review Issues Reference
 
@@ -235,8 +235,9 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
 - [x] T045 [P] Fix `stream_rdy_output` typo in `src/server/agent/factory.py:52`
   - Change to correct spelling `stream_rdy_output`
 
-- [ ] T046 [US1] Implement backpressure threshold enforcement in `src/server/streaming_synthesis.py`
+- [x] T046 [US1] Implement backpressure threshold enforcement in `src/server/agent/langchain_agent.py`
   - Per FR-009: enforce max_depth=100, drop oldest and log
+  - Added `BackpressureQueue` class using `deque` with maxlen
 
 - [x] T047 [P] Remove event_queue dead code in `src/server/agent/stream_controller.py`
   - Remove unused `self._event_queue = asyncio.Queue(max_depth=100)`
@@ -251,4 +252,4 @@ See `REVIEW_ISSUES.md` for detailed problem descriptions.
 
 | Phase | Tasks | Status |
 |-------|-------|--------|
-| Phase 8: Bug Fixes | T040-T047 | 7/8 done (T040, T041, T042, T043, T044, T045, T047) |
+| Phase 8: Bug Fixes | T040-T047 | ✅ 8/8 DONE |
