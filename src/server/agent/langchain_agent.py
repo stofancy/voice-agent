@@ -5,7 +5,10 @@ Wraps LangChain agent with astream_events() for non-blocking tool execution.
 """
 
 import asyncio
+from collections import deque
 from typing import AsyncGenerator, Dict, List, Any, Optional
+
+from loguru import logger
 
 from .base import BaseAgent, AgentEvent
 from .events import StreamChunkEvent, ToolStartEvent, ToolCompleteEvent, ToolErrorEvent, ToolProgressEvent
@@ -21,9 +24,39 @@ TOOL_PROGRESS_MESSAGES = {
 
 TOOL_TIMEOUT_SECONDS = 30.0
 TOOL_PROGRESS_INTERVAL_SECONDS = 0.5
+BACKPRESSURE_MAX_DEPTH = 100
 
 FALLBACK_TIMEOUT_MESSAGE = "Sorry, the request timed out. Would you like me to try again?"
 FALLBACK_ERROR_MESSAGE = "Sorry, something went wrong. Please try again."
+
+
+class BackpressureQueue:
+    """
+    Queue with backpressure support.
+
+    When max_depth is reached, dropping the oldest item to make room.
+    """
+
+    def __init__(self, max_depth: int = BACKPRESSURE_MAX_DEPTH):
+        self._queue: deque[AgentEvent] = deque(maxlen=max_depth)
+        self._max_depth = max_depth
+
+    def put_nowait(self, event: AgentEvent) -> None:
+        """Put an event in the queue, dropping oldest if full."""
+        if len(self._queue) >= self._max_depth:
+            dropped = self._queue.popleft()
+            logger.warning(
+                f"Backpressure: queue full (max={self._max_depth}), dropping oldest event: {type(dropped).__name__}"
+            )
+        self._queue.append(event)
+
+    def get_nowait(self) -> AgentEvent:
+        """Get an event from the queue."""
+        return self._queue.popleft()
+
+    def empty(self) -> bool:
+        """Check if queue is empty."""
+        return len(self._queue) == 0
 
 
 class LangChainAgent(BaseAgent):
@@ -31,7 +64,6 @@ class LangChainAgent(BaseAgent):
     LangChain agent wrapper with streaming support.
 
     Uses astream_events() to emit tool events without blocking the stream.
-    Emits TTS text via stream_controller to maintain continuous audio.
     """
 
     def __init__(
@@ -84,7 +116,7 @@ class LangChainAgent(BaseAgent):
         self,
         tool_name: str,
         stop_event: asyncio.Event,
-        event_queue: asyncio.Queue,
+        event_queue: BackpressureQueue,
     ) -> None:
         """Background task that emits progress every 500ms while tool runs."""
         try:
@@ -119,13 +151,12 @@ class LangChainAgent(BaseAgent):
         if not using_provided_history:
             messages.append({"role": "user", "content": input_text})
 
-        # Event queue for coordinating with background tasks
-        event_queue: asyncio.Queue[AgentEvent] = asyncio.Queue()
+        # Event queue with backpressure support (max_depth=100)
+        event_queue: BackpressureQueue = BackpressureQueue(max_depth=BACKPRESSURE_MAX_DEPTH)
         tool_stop_event: Optional[asyncio.Event] = None
         progress_task: Optional[asyncio.Task] = None
         timeout_task: Optional[asyncio.Task] = None
         current_tool_name: Optional[str] = None
-        tool_start_time: Optional[float] = None
 
         async def emit_timeout():
             """Background task that fires on tool timeout."""
@@ -156,7 +187,6 @@ class LangChainAgent(BaseAgent):
                     elif event_type == "on_tool_start":
                         tool_name = event.get("name", "unknown")
                         current_tool_name = tool_name
-                        tool_start_time = asyncio.get_running_loop().time()
                         yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
 
                         # Start periodic progress emission
@@ -188,16 +218,12 @@ class LangChainAgent(BaseAgent):
                             tool_stop_event = None
 
                         current_tool_name = None
-                        tool_start_time = None
 
                         yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
 
                     # Check event queue for timeout/progress events
-                    try:
-                        while not event_queue.empty():
-                            yield event_queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        pass
+                    while not event_queue.empty():
+                        yield event_queue.get_nowait()
 
             else:
                 # Fallback: use LLM directly (legacy path)
@@ -212,7 +238,6 @@ class LangChainAgent(BaseAgent):
                     elif event_type == "on_tool_start":
                         tool_name = event.get("name", "unknown")
                         current_tool_name = tool_name
-                        tool_start_time = asyncio.get_running_loop().time()
                         yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
 
                         # Start periodic progress emission
@@ -244,16 +269,12 @@ class LangChainAgent(BaseAgent):
                             tool_stop_event = None
 
                         current_tool_name = None
-                        tool_start_time = None
 
                         yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
 
                     # Check event queue for timeout/progress events
-                    try:
-                        while not event_queue.empty():
-                            yield event_queue.get_nowait()
-                    except asyncio.QueueEmpty:
-                        pass
+                    while not event_queue.empty():
+                        yield event_queue.get_nowait()
 
         except asyncio.TimeoutError:
             # Handle timeout during LLM streaming (less common)
