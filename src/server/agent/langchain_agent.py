@@ -81,8 +81,11 @@ class LangChainAgent(BaseAgent):
         Uses LangChain's astream_events for non-blocking tool execution.
         Emits TTS text via stream_controller for continuous audio.
         """
-        messages = conversation_history or self._conversation_history
-        messages.append({"role": "user", "content": input_text})
+        # Track whether we created a new history list (vs using provided one)
+        using_provided_history = conversation_history is not None
+        messages = conversation_history if using_provided_history else self._conversation_history
+        if not using_provided_history:
+            messages.append({"role": "user", "content": input_text})
 
         try:
             if self._agent_executor is not None:
@@ -133,7 +136,9 @@ class LangChainAgent(BaseAgent):
                         yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
 
         finally:
-            self._conversation_history.append({"role": "user", "content": input_text})
+            # Only append to instance history if we created it locally
+            if not using_provided_history:
+                self._conversation_history.append({"role": "user", "content": input_text})
 
     async def ainvoke(
         self,

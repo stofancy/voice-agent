@@ -48,7 +48,7 @@ def _create_react_agent_executor(
         agent=agent,
         tools=tools,
         verbose=True,
-        stream_rdry_output=True,
+        stream_rdy_output=True,
     )
 
     return executor
