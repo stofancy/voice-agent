@@ -23,11 +23,16 @@ from .booking_agent import BookingAgent
 try:
     from .stream_controller import StreamController
     from .llm_factory import LangChainLLMWrapper, create_langchain_llm
-    from .factory import create_query_agent, create_booking_agent, create_default_agent
+    from .factory import (
+        create_query_agent,
+        create_booking_agent,
+        create_default_agent,
+        _create_react_agent_executor,
+    )
     from .agent_streaming_synthesis import AgentStreamingSynthesis, AgentSynthesisConfig
 
     LANGCHAIN_AVAILABLE = True
-except ImportError:
+except ImportError as e:
     LANGCHAIN_AVAILABLE = False
     StreamController = None
     LangChainLLMWrapper = None
@@ -35,6 +40,7 @@ except ImportError:
     create_query_agent = None
     create_booking_agent = None
     create_default_agent = None
+    _create_react_agent_executor = None
     LangChainAgent = None
     AgentStreamingSynthesis = None
     AgentSynthesisConfig = None

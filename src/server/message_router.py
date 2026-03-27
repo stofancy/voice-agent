@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from .stt import BaseSTT
     from .vad import VoiceActivityDetector
     from .streaming_synthesis import SynthesisConfig
+    from .agent.base import BaseAgent
 
 
 async def handle_start_listening(
@@ -35,6 +36,7 @@ async def handle_stop_listening(
     tts: "BaseTTS",
     TTS_SAMPLE_RATE: int,
     SUBTITLE_STREAMING: bool,
+    agent: Optional["BaseAgent"] = None,
 ) -> Optional[asyncio.Task]:
     """Handle stop_listening: transcribes audio and starts response."""
     from .streaming_synthesis import SynthesisConfig
@@ -63,6 +65,7 @@ async def handle_stop_listening(
         ),
         turn_context=session.turn_context,
         connection_state=session.connection_state,
+        agent=agent,
     )
     task = asyncio.create_task(voice_turn.execute(audio_data))
     session.start_response(task)

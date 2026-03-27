@@ -30,21 +30,39 @@ class LangChainAgent(BaseAgent):
     def __init__(
         self,
         agent_type: str,
-        llm,
+        llm: Any,
         tools: List[Any],
         stream_controller=None,
         system_prompt: Optional[str] = None,
+        agent_executor: Any = None,
     ):
+        """
+        Initialize LangChainAgent.
+
+        Args:
+            agent_type: Type identifier for this agent
+            llm: LangChain LLM (ChatOpenAI) - used if agent_executor not provided
+            tools: List of LangChain tools - used if agent_executor not provided
+            stream_controller: Optional StreamController for TTS
+            system_prompt: Optional system prompt - used if agent_executor not provided
+            agent_executor: Pre-created LangChain AgentExecutor (takes precedence)
+        """
         self._agent_type = agent_type
         self._llm = llm
         self._tools = tools
         self._stream_controller = stream_controller
         self._system_prompt = system_prompt or "You are a helpful voice assistant."
         self._conversation_history: List[Dict[str, str]] = []
+        self._agent_executor = agent_executor
 
     @property
     def agent_type(self) -> str:
         return self._agent_type
+
+    @property
+    def has_agent_executor(self) -> bool:
+        """Check if agent executor is available."""
+        return self._agent_executor is not None
 
     def _get_progress_message(self, tool_name: str) -> str:
         """Get appropriate progress message for tool."""
@@ -67,26 +85,52 @@ class LangChainAgent(BaseAgent):
         messages.append({"role": "user", "content": input_text})
 
         try:
-            async for event in self._llm.astream_events({"messages": messages}):
-                event_type = event.get("event")
+            if self._agent_executor is not None:
+                # Use pre-created agent executor
+                async for event in self._agent_executor.astream_events(
+                    {"input": input_text, "chat_history": messages}
+                ):
+                    event_type = event.get("event")
 
-                if event_type == "on_llm_stream":
-                    token = event.get("data", {}).get("chunk", {}).get("content", "")
-                    if token:
-                        yield StreamChunkEvent(text=token)
+                    if event_type == "on_llm_stream":
+                        token = event.get("data", {}).get("chunk", {}).get("content", "")
+                        if token:
+                            yield StreamChunkEvent(text=token)
 
-                elif event_type == "on_tool_start":
-                    tool_name = event.get("name", "unknown")
-                    yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
-                    if self._stream_controller:
-                        await self._stream_controller.emit_progress(
-                            self._get_progress_message(tool_name)
-                        )
+                    elif event_type == "on_tool_start":
+                        tool_name = event.get("name", "unknown")
+                        yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
+                        if self._stream_controller:
+                            await self._stream_controller.emit_progress(
+                                self._get_progress_message(tool_name)
+                            )
 
-                elif event_type == "on_tool_end":
-                    tool_name = event.get("name", "unknown")
-                    output = event.get("data", {}).get("output", {})
-                    yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
+                    elif event_type == "on_tool_end":
+                        tool_name = event.get("name", "unknown")
+                        output = event.get("data", {}).get("output", {})
+                        yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
+            else:
+                # Fallback: use LLM directly (legacy path)
+                async for event in self._llm.astream_events({"messages": messages}):
+                    event_type = event.get("event")
+
+                    if event_type == "on_llm_stream":
+                        token = event.get("data", {}).get("chunk", {}).get("content", "")
+                        if token:
+                            yield StreamChunkEvent(text=token)
+
+                    elif event_type == "on_tool_start":
+                        tool_name = event.get("name", "unknown")
+                        yield ToolStartEvent(tool_name=tool_name, tool_input=event.get("data", {}))
+                        if self._stream_controller:
+                            await self._stream_controller.emit_progress(
+                                self._get_progress_message(tool_name)
+                            )
+
+                    elif event_type == "on_tool_end":
+                        tool_name = event.get("name", "unknown")
+                        output = event.get("data", {}).get("output", {})
+                        yield ToolCompleteEvent(tool_name=tool_name, tool_output=output)
 
         finally:
             self._conversation_history.append({"role": "user", "content": input_text})

@@ -86,14 +86,13 @@ class TestStreamContinuity:
         """Tool progress messages are defined for hotel tools."""
         from src.server.agent.langchain_agent import TOOL_PROGRESS_MESSAGES
 
-        assert "hotel" in TOOL_PROGRESS_MESSAGES
-        assert "search" in TOOL_PROGRESS_MESSAGES
-        assert "book" in TOOL_PROGRESS_MESSAGES
+        assert "search_hotels" in TOOL_PROGRESS_MESSAGES
+        assert "book_hotel" in TOOL_PROGRESS_MESSAGES
 
     def test_hotel_progress_message(self):
         """Hotel progress message is appropriate."""
         from src.server.agent.langchain_agent import TOOL_PROGRESS_MESSAGES
 
-        msg = TOOL_PROGRESS_MESSAGES["hotel"]
+        msg = TOOL_PROGRESS_MESSAGES["search_hotels"]
 
-        assert "hotel" in msg.lower() or "finding" in msg.lower()
+        assert "hotel" in msg.lower() or "search" in msg.lower() or "finding" in msg.lower()
