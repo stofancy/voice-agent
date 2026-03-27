@@ -23,6 +23,10 @@ As a user, I want to hear continuous responses during tool execution so I don't 
 
 3. **Given** tool call fails, **When** error occurs, **Then** error is spoken and recovery suggestion offered
 
+4. **Given** tool call times out (30s default), **When** timeout occurs, **Then** agent emits "Sorry, the request timed out. Would you like me to try again?" and waits for user response
+
+5. **Given** event queue reaches backpressure threshold (depth > 100), **When** new event arrives, **Then** oldest event is dropped and logged
+
 ---
 
 ### User Story 2 - Voice Booking Flow (Priority: P1)
@@ -85,8 +89,16 @@ As a user, I want to interrupt the agent at any time so I can correct or change 
 - **FR-004**: System MUST support at least 2 concurrent specialized agents (booking, query)
 - **FR-005**: System MUST route requests to appropriate agent based on intent classification
 - **FR-006**: Agent state MUST be maintained across turns in a conversation
+- **FR-006a**: Conversation state includes: session history (last N turns), current agent type, pending tool context
+- **FR-006b**: State is stored in-memory per session (ephemeral); no persistence across server restarts
+- **FR-006c**: Tool call results from prior turns MAY be referenced in subsequent turns
 - **FR-007**: User interruption MUST cancel in-flight tool calls and reset stream
+- **FR-007a**: Tool execution timeout is 30s default, configurable per tool
+- **FR-007b**: On tool timeout: emit `tool_error` with "timeout" reason, emit TTS fallback message, continue stream
+- **FR-007c**: On tool failure: emit `tool_error` with error reason, emit TTS recovery suggestion, continue stream
 - **FR-008**: WebSocket protocol MUST remain backward compatible with existing frontend
+- **FR-009**: Stream output MUST NOT be blocked by tool execution - event queue max depth = 100 (backpressure threshold)
+- **FR-010**: Progress messages during tool execution: emit at tool_start, then every 500ms if tool still running, then at tool_complete
 
 ### Key Entities
 
@@ -101,7 +113,9 @@ As a user, I want to interrupt the agent at any time so I can correct or change 
 ### Measurable Outcomes
 
 - **SC-001**: Tool calls do not cause >200ms gap in stream output
+  - *Measurement*: Record timestamp of last token before tool_start event, subtract timestamp of first token after tool_complete. Gap = tool_complete_time - last_pre_tool_time - LLM_generation_time. Target: <200ms.
 - **SC-002**: TTS continues speaking during tool execution (no silence >500ms)
+  - *Measurement*: TTS audio buffer depletion timestamp. Target: no >500ms gap between audio chunks
 - **SC-003**: Multiple agents can be instantiated and queried concurrently
 - **SC-004**: Existing WebSocket protocol remains compatible (no breaking changes to frontend)
 - **SC-005**: User interruption is processed within 300ms
@@ -113,3 +127,9 @@ As a user, I want to interrupt the agent at any time so I can correct or change 
 - LangChain Agents provides agent scaffolding with custom stream handling
 - WebSocket message types can be extended but not removed
 - Session state is ephemeral (no persistence across server restarts)
+- LangChain Agent limitations:
+  - `astream_events()` emits events with ~50-100ms latency overhead per event
+  - Tool execution is sequential within a single agent turn (ReAct loop)
+  - Long tool execution (>30s) requires explicit timeout handling
+- Chrome MCP integration: browser automation tools are out-of-scope for v1
+- Tool retry: failed tools are NOT retried automatically; user receives error and decides
