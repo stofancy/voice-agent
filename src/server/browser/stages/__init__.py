@@ -4,7 +4,7 @@ Browser booking stage tools.
 Each stage corresponds to a step in the hotel booking flow on Booking.com.
 """
 
-from .base import BookingStage, StageResult, StageAction
+from .base import BookingStage, StageResult, StageAction, TurnContext
 from .search import BookHotelSearchTool
 from .select_hotel import BookHotelSelectHotelTool
 from .navigate_property import BookHotelNavigatePropertyTool
@@ -28,6 +28,7 @@ __all__ = [
     "BookingStage",
     "StageResult",
     "StageAction",
+    "TurnContext",
     "BookHotelSearchTool",
     "BookHotelSelectHotelTool",
     "BookHotelNavigatePropertyTool",

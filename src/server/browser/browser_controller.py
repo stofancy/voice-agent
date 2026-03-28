@@ -29,6 +29,10 @@ from .exceptions import (
 CHROME_REMOTE_DEBUGGING_PORT = 9222
 CHROME_PROFILE_NAME = "voice-agent"
 
+# Retry configuration
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY_SECONDS = 1.0
+
 
 @dataclass
 class PageInfo:
@@ -651,6 +655,8 @@ class BrowserController:
                 await self.click(text="Stay on Booking.com")
                 await asyncio.sleep(0.3)
                 await self.click(text="Close")
+        except Exception as e:
+            logger.warning(f"[BrowserController] Popup handling error: {e}")
 
     async def extract_hotel_data(self) -> list[dict]:
         """
@@ -789,6 +795,112 @@ class BrowserController:
         except Exception as e:
             logger.error(f"[BrowserController] Login check failed: {e}")
             return {"hasSignIn": False, "hasRegister": False, "hasBookingSession": False}
+
+    async def _execute_with_retry(
+        self,
+        operation_name: str,
+        operation: Any,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        retry_delay: float = DEFAULT_RETRY_DELAY_SECONDS,
+    ) -> Any:
+        """
+        Execute an operation with retry logic.
+
+        Args:
+            operation_name: Name of the operation for logging
+            operation: Async callable to execute
+            max_retries: Maximum number of retry attempts (default 3)
+            retry_delay: Initial delay between retries in seconds (default 1.0)
+
+        Returns:
+            Result from successful operation
+
+        Raises:
+            Last exception if all retries fail
+        """
+        last_error = None
+        for attempt in range(max_retries + 1):
+            try:
+                logger.debug(
+                    f"[BrowserController] {operation_name} attempt {attempt + 1}/{max_retries + 1}"
+                )
+                result = await operation()
+                if attempt > 0:
+                    logger.info(
+                        f"[BrowserController] {operation_name} succeeded on attempt {attempt + 1}"
+                    )
+                return result
+
+            except Exception as e:
+                last_error = e
+                logger.warning(
+                    f"[BrowserController] {operation_name} failed attempt {attempt + 1}/{max_retries + 1}: {e}"
+                )
+
+                if attempt < max_retries:
+                    # Exponential backoff
+                    delay = retry_delay * (2 ** attempt)
+                    logger.info(
+                        f"[BrowserController] Retrying {operation_name} in {delay:.1f}s..."
+                    )
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        f"[BrowserController] {operation_name} failed after {max_retries + 1} attempts"
+                    )
+
+        # All retries exhausted
+        raise last_error
+
+    async def navigate_with_retry(self, url: str) -> None:
+        """
+        Navigate to URL with automatic retry on failure.
+
+        Args:
+            url: URL to navigate to
+        """
+        await self._execute_with_retry(
+            operation_name=f"navigate to {url}",
+            operation=lambda: self.navigate(url),
+        )
+
+    async def click_with_retry(self, selector: str | None = None, **kwargs) -> None:
+        """
+        Click element with automatic retry on failure.
+
+        Args:
+            selector: CSS selector
+            **kwargs: Alternative selectors
+        """
+        await self._execute_with_retry(
+            operation_name=f"click element {selector or kwargs}",
+            operation=lambda: self.click(selector, **kwargs),
+        )
+
+    async def fill_with_retry(self, selector: str, value: str) -> None:
+        """
+        Fill input field with automatic retry on failure.
+
+        Args:
+            selector: CSS selector for input
+            value: Value to fill in
+        """
+        await self._execute_with_retry(
+            operation_name=f"fill {selector}",
+            operation=lambda: self.fill(selector, value),
+        )
+
+    async def evaluate_script_with_retry(self, script: str) -> Any:
+        """
+        Evaluate JavaScript with automatic retry on failure.
+
+        Args:
+            script: JavaScript code to execute
+        """
+        await self._execute_with_retry(
+            operation_name="evaluate script",
+            operation=lambda: self.evaluate_script(script),
+        )
 
     def __repr__(self) -> str:
         return f"BrowserController(page_id={self._current_page_id})"

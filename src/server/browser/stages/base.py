@@ -158,3 +158,62 @@ class TurnContext:
     def add_user_input(self, text: str) -> None:
         """Record user input."""
         self.user_inputs.append(text)
+
+    def pause(self) -> dict:
+        """
+        Save current state for later resumption.
+
+        Returns:
+            Dictionary containing all state for restoration
+        """
+        state = {
+            "session_id": self.session_id,
+            "current_stage_index": self.current_stage_index,
+            "booking_data": self.booking_data.copy(),
+            "user_inputs": self.user_inputs.copy(),
+            "selected_items": self.selected_items.copy(),
+        }
+        logger.info(f"[TurnContext] Session {self.session_id} paused at stage {self.current_stage_index}")
+        return state
+
+    def resume(self, state: dict) -> None:
+        """
+        Restore state from a paused session.
+
+        Args:
+            state: State dictionary from pause()
+        """
+        self.session_id = state.get("session_id", self.session_id)
+        self.current_stage_index = state.get("current_stage_index", 0)
+        self.booking_data = state.get("booking_data", {}).copy()
+        self.user_inputs = state.get("user_inputs", []).copy()
+        self.selected_items = state.get("selected_items", {}).copy()
+        logger.info(f"[TurnContext] Session {self.session_id} resumed at stage {self.current_stage_index}")
+
+    def get_state(self) -> dict:
+        """
+        Get current state without pausing.
+
+        Returns:
+            Dictionary containing current state
+        """
+        return self.pause()
+
+    def restore_state(self, state: dict) -> None:
+        """
+        Restore state (alias for resume).
+
+        Args:
+            state: State dictionary
+        """
+        self.resume(state)
+
+    @property
+    def is_paused(self) -> bool:
+        """Check if context is in a paused state (placeholder for state machine)."""
+        return getattr(self, "_paused", False)
+
+    @is_paused.setter
+    def is_paused(self, value: bool) -> None:
+        """Set paused state."""
+        self._paused = value
