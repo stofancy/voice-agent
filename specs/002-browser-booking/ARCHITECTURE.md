@@ -329,9 +329,11 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 ## 9. 待办事项
 
 ### P1 - 当前迭代
-- [ ] Python MCP SDK 集成 (`uv add mcp`)
-- [ ] BrowserController 实现
-- [ ] 7 个 Stage Tools 实现
+- [x] **Python MCP SDK 集成** ✅ (`uv add mcp`)
+- [x] **BrowserController 实现** ✅
+  - HTTP-based CDP access, hotel extraction, login detection
+- [x] **7 个 Stage Tools 实现** ✅
+  - search, select_hotel, navigate_property, select_room, confirm_selection, fill_guest, finalize
 - [ ] TurnContext 状态持久化
 - [x] **登录检测探索** ✅ (KB-020)
 - [ ] 重试机制 (3次)
