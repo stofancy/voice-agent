@@ -18,6 +18,8 @@ TOOL_PROGRESS_MESSAGES = {
     "search_hotels": "Searching for hotels...",
     "book_hotel": "Processing your booking...",
     "get_weather": "Checking the weather...",
+    "web_search": "Searching the web...",
+    "get_time": "Getting the time...",
     "echo": "Processing...",
     "default": "One moment please...",
 }
@@ -41,12 +43,12 @@ class BackpressureQueue:
         self._queue: deque[AgentEvent] = deque(maxlen=max_depth)
         self._max_depth = max_depth
 
-    def put_nowait(self, event: AgentEvent) -> None:
+    def put_nowait(self, event: AgentEvent, corr_id: str = "unknown") -> None:
         """Put an event in the queue, dropping oldest if full."""
         if len(self._queue) >= self._max_depth:
             dropped = self._queue.popleft()
             logger.warning(
-                f"Backpressure: queue full (max={self._max_depth}), dropping oldest event: {type(dropped).__name__}"
+                f"[{corr_id}] Backpressure: queue full (max={self._max_depth}), dropping oldest event: {type(dropped).__name__}"
             )
         self._queue.append(event)
 
@@ -75,6 +77,7 @@ class LangChainAgent(BaseAgent):
         system_prompt: Optional[str] = None,
         agent_executor: Any = None,
         tool_timeout: float = TOOL_TIMEOUT_SECONDS,
+        turn_id: Optional[str] = None,
     ):
         """
         Initialize LangChainAgent.
@@ -87,6 +90,7 @@ class LangChainAgent(BaseAgent):
             system_prompt: Optional system prompt - used if agent_executor not provided
             agent_executor: Pre-created LangChain AgentExecutor (takes precedence)
             tool_timeout: Timeout for tool execution in seconds (default 30s)
+            turn_id: Optional correlation ID for request tracing
         """
         self._agent_type = agent_type
         self._llm = llm
@@ -96,6 +100,7 @@ class LangChainAgent(BaseAgent):
         self._conversation_history: List[Dict[str, str]] = []
         self._agent_executor = agent_executor
         self._tool_timeout = tool_timeout
+        self._turn_id = turn_id
 
     @property
     def agent_type(self) -> str:
@@ -117,6 +122,7 @@ class LangChainAgent(BaseAgent):
         tool_name: str,
         stop_event: asyncio.Event,
         event_queue: BackpressureQueue,
+        corr_id: str = "unknown",
     ) -> None:
         """Background task that emits progress every 500ms while tool runs."""
         try:
@@ -129,7 +135,8 @@ class LangChainAgent(BaseAgent):
                 # Also put progress event in queue for stream consumers
                 if not stop_event.is_set():
                     event_queue.put_nowait(
-                        ToolProgressEvent(tool_name=tool_name, status="progress")
+                        ToolProgressEvent(tool_name=tool_name, status="progress"),
+                        corr_id=corr_id,
                     )
         except asyncio.CancelledError:
             pass
@@ -138,13 +145,23 @@ class LangChainAgent(BaseAgent):
         self,
         input_text: str,
         conversation_history: List[Dict[str, str]] | None = None,
+        turn_id: Optional[str] = None,
     ) -> AsyncGenerator[AgentEvent, None]:
         """
         Stream agent response with tool events.
 
         Uses LangChain's astream_events for non-blocking tool execution.
         Emits TTS text via stream_controller for continuous audio.
+
+        Args:
+            input_text: User input text
+            conversation_history: Optional existing conversation history
+            turn_id: Optional correlation ID for request tracing (overrides agent's turn_id)
         """
+        # Use provided turn_id or fall back to agent's turn_id
+        corr_id = turn_id or self._turn_id or "unknown"
+        logger.info(f"[{corr_id}] Agent {self._agent_type} starting astream")
+
         # Track whether we created a new history list (vs using provided one)
         using_provided_history = conversation_history is not None
         messages = conversation_history if using_provided_history else self._conversation_history
@@ -163,10 +180,12 @@ class LangChainAgent(BaseAgent):
             try:
                 await asyncio.sleep(self._tool_timeout)
                 # Timeout fired - tool is still running
+                logger.warning(f"[{corr_id}] Tool {current_tool_name or 'unknown'} timed out after {self._tool_timeout}s")
                 if self._stream_controller:
                     await self._stream_controller.emit_progress(FALLBACK_TIMEOUT_MESSAGE)
                 event_queue.put_nowait(
-                    ToolErrorEvent(tool_name=current_tool_name or "unknown", error="timeout")
+                    ToolErrorEvent(tool_name=current_tool_name or "unknown", error="timeout"),
+                    corr_id=corr_id,
                 )
             except asyncio.CancelledError:
                 pass
@@ -192,7 +211,7 @@ class LangChainAgent(BaseAgent):
                         # Start periodic progress emission
                         tool_stop_event = asyncio.Event()
                         progress_task = asyncio.create_task(
-                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue)
+                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue, corr_id)
                         )
                         # Start timeout handler
                         timeout_task = asyncio.create_task(emit_timeout())
@@ -243,7 +262,7 @@ class LangChainAgent(BaseAgent):
                         # Start periodic progress emission
                         tool_stop_event = asyncio.Event()
                         progress_task = asyncio.create_task(
-                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue)
+                            self._emit_periodic_progress(tool_name, tool_stop_event, event_queue, corr_id)
                         )
                         # Start timeout handler
                         timeout_task = asyncio.create_task(emit_timeout())
@@ -297,15 +316,19 @@ class LangChainAgent(BaseAgent):
         self,
         input_text: str,
         conversation_history: List[Dict[str, str]] | None = None,
+        turn_id: Optional[str] = None,
     ) -> str:
         """Invoke agent and return complete response."""
+        corr_id = turn_id or self._turn_id or "unknown"
+        logger.info(f"[{corr_id}] Agent {self._agent_type} ainvoke started")
         messages = conversation_history or self._conversation_history
         messages.append({"role": "user", "content": input_text})
 
         response = ""
-        async for event in self.astream(input_text, messages):
+        async for event in self.astream(input_text, messages, turn_id=corr_id):
             if isinstance(event, StreamChunkEvent):
                 response += event.text
 
         self._conversation_history.append({"role": "assistant", "content": response})
+        logger.info(f"[{corr_id}] Agent {self._agent_type} ainvoke completed, response length: {len(response)}")
         return response

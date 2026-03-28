@@ -6,10 +6,11 @@ without blocking the LLM stream.
 """
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.outputs import LLMResult
+from loguru import logger
 
 from .events import (
     ToolStartEvent,
@@ -28,17 +29,20 @@ class StreamController(BaseCallbackHandler):
     Attributes:
         tts_callback: Callback function to emit TTS text
         is_cancelled: Cancellation flag
+        turn_id: Optional correlation ID for request tracing
     """
 
     def __init__(
         self,
         tts_callback=None,
         ws_callback=None,
+        turn_id: Optional[str] = None,
     ):
         self.tts_callback = tts_callback
         self.ws_callback = ws_callback
         self.is_cancelled = False
         self._current_tool = None
+        self._turn_id = turn_id
 
     def reset(self):
         """Reset state for new conversation."""
@@ -49,6 +53,23 @@ class StreamController(BaseCallbackHandler):
         """Check if operation should be cancelled."""
         return self.is_cancelled
 
+    def set_turn_id(self, turn_id: str) -> None:
+        """Set correlation ID for request tracing."""
+        self._turn_id = turn_id
+
+    def _log(self, level: str, msg: str) -> None:
+        """Log with correlation ID if available."""
+        corr_id = self._turn_id or "unknown"
+        log_msg = f"[{corr_id}] {msg}"
+        if level == "debug":
+            logger.debug(log_msg)
+        elif level == "info":
+            logger.info(log_msg)
+        elif level == "warning":
+            logger.warning(log_msg)
+        elif level == "error":
+            logger.error(log_msg)
+
     def on_llm_start(
         self,
         serialized: Dict[str, Any],
@@ -56,6 +77,7 @@ class StreamController(BaseCallbackHandler):
         **kwargs,
     ) -> None:
         """Called when LLM starts generating."""
+        self._log("debug", f"LLM start: {serialized.get('name', 'unknown')}")
         if self.tts_callback and not self.is_cancelled:
             asyncio.create_task(self.tts_callback("Let me think..."))
 
@@ -70,7 +92,7 @@ class StreamController(BaseCallbackHandler):
 
     def on_llm_end(self, response: LLMResult, **kwargs) -> None:
         """Called when LLM finishes."""
-        pass
+        self._log("debug", "LLM end")
 
     def on_tool_start(
         self,
@@ -84,6 +106,7 @@ class StreamController(BaseCallbackHandler):
 
         tool_name = serialized.get("name", "unknown")
         self._current_tool = tool_name
+        self._log("info", f"Tool start: {tool_name}")
 
         if self.ws_callback:
             event = ToolStartEvent(tool_name=tool_name, tool_input={"input": input_str})
@@ -102,6 +125,7 @@ class StreamController(BaseCallbackHandler):
             return
 
         tool_name = self._current_tool or "unknown"
+        self._log("info", f"Tool end: {tool_name}")
 
         if self.ws_callback:
             event = ToolCompleteEvent(tool_name=tool_name, tool_output=output)
@@ -119,6 +143,7 @@ class StreamController(BaseCallbackHandler):
     ) -> None:
         """Called when a tool fails."""
         tool_name = self._current_tool or "unknown"
+        self._log("error", f"Tool error: {tool_name} - {str(error)}")
 
         if self.ws_callback:
             event = ToolErrorEvent(tool_name=tool_name, error=str(error))

@@ -2,6 +2,7 @@
 TurnContext - Per-turn context for managing conversation state and cancellation.
 """
 
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 import asyncio
@@ -10,6 +11,7 @@ import asyncio
 @dataclass
 class TurnContext:
     """Per-turn context shared between VoiceTurn and StreamingSynthesis."""
+    turn_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
     cancelled: asyncio.Event = field(default_factory=asyncio.Event)
     audio_data: Optional["np.ndarray"] = None  # type: ignore[name-defined]
     transcript: str = ""
