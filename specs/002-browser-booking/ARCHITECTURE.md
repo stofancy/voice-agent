@@ -1,8 +1,37 @@
 # Browser Booking - Architecture & Decisions
 
 **Created**: 2026-03-28
-**Updated**: 2026-03-28 (Q7-Q13 answered)
+**Updated**: 2026-03-28 (Q&A 完整整合)
 **Status**: Requirements Collection Complete
+
+---
+
+## 0. Q&A 答案汇总
+
+### Q&A 记录 (from transcript)
+
+| Q# | 问题 | 答案摘要 |
+|----|------|---------|
+| Q1 | Browser 操作范围 | Booking.com only，复杂交互见 SKILL.md，浏览器内支付，成功=到支付页 |
+| Q5 | 超时/错误处理 | 需要更长超时，暂不考虑重试 |
+| Q6 | 多阶段实现 | **B: 每个 Stage 独立 Tool**，避免 LangChain stream 阻塞前端 |
+| Q7 | 用户输入意图识别 | 会话概念，当前会话中理解 "the second one" |
+| Q8 | Browser Session 归属 | User Session 绑定，暂时单用户 |
+| Q10 | Tool 输出内容 | 结构化数据 + 推荐建议，自然语言告知用户 |
+| Q11 | Session 归属确认 | User Session → Browser Session + TurnContext，确认正确 |
+| Q12 | 架构关系 | BrowserController 从属于 Stage Tools，不是并列 |
+| Q13 | 工具抽象层 | 保持灵活性，后期可替换为 API |
+| Q14 | 日期处理 | LLM 判断，Session 初始化时提供 System Context |
+| Q15 | 语言/货币 | 取决于 Booking.com，需要告诉用户货币种类 |
+| Q16 | 错误处理 | LLM 判断 |
+| Q17 | 用户纠正机制 | LLM 先行判断是否需要特殊处理 |
+| Q18 | 支付页面 | 无需监控，用户手动完成 |
+
+### 关键架构确认
+
+1. **BrowserController 从属于 Stage Tools**（不是并列关系）
+2. **Response 三段式结构**：收到请求 → 正在做什么 → 结果（数据+建议）
+3. **自然语言选择**：支持 "第二个"、"贵一点的"、"带早餐的" 等
 
 ---
 
@@ -38,15 +67,15 @@
 ```
 VoiceTurn
 ├── BookingAgent (LangChain)
-│   └── [7 Stage Tools]
-│       ├── book_hotel_search
-│       ├── book_hotel_select_hotel
-│       ├── book_hotel_select_room
+│   └── [7 Stage Tools] ←── BrowserController (从属)
+│       ├── book_hotel_search ──→ BrowserController.snapshot()
+│       ├── book_hotel_select_hotel ──→ BrowserController.click()
+│       ├── book_hotel_select_room ──→ BrowserController.fill()
 │       ├── book_hotel_confirm_selection
 │       ├── book_hotel_fill_guest
 │       └── book_hotel_finalize
 │
-├── BrowserController
+├── BrowserController (每个 Stage Tool 持有)
 │   ├── MCP Client (启动独立进程)
 │   ├── Session 管理
 │   └── 弹窗处理
@@ -95,7 +124,60 @@ Search → Results → Property → Room → Selection → Guest → Payment
 
 ---
 
-## 4. Tool Output Schema
+## 4. Response 三段式结构
+
+每轮 Response 分三部分告知用户：
+
+| 阶段 | 目的 | 示例 |
+|------|------|------|
+| a. 收到请求 | 确认理解，准备执行 | "我理解您想预订巴黎4月1-5日的酒店..." |
+| b. 正在做什么 | 状态更新，持续反馈 | "正在搜索巴黎的酒店..." |
+| c. 结果 | 展示数据，建议，等待抉择 | "找到3家酒店，您想要哪个？" |
+
+### Response 数据结构
+
+```json
+{
+  "turn_id": "abc123",
+  "stage": "hotel_selection",
+  "response": {
+    "text": "I found 3 hotels in Paris...",
+    "data": {
+      "type": "hotel_list",
+      "items": [
+        {
+          "id": "h1",
+          "display": "Hotel A - $150/night",
+          "details": {...},
+          "recommendation_score": 0.95,
+          "recommendation_reason": "Best value with high rating"
+        }
+      ]
+    },
+    "action": {
+      "type": "WAIT_FOR_SELECTION",
+      "allow_auto_proceed": false,
+      "timeout_seconds": 120
+    }
+  }
+}
+```
+
+### 自然语言选择模式
+
+| 用户说 | 解析为 |
+|--------|--------|
+| "第二个" / "the second one" | 选择列表第2项 |
+| "贵一点的" / "the more expensive one" | 按价格排序后选 |
+| "带早餐的" / "with breakfast" | 按条件过滤 |
+| "评分最高的" / "best rated" | 按评分排序 |
+| "那个" / "that one" | 确认当前选中项 |
+| "不是" / "not that" | 拒绝当前选项，重新选择 |
+| "换一批" / "show me others" | 重新搜索/展示更多 |
+
+---
+
+## 5. Tool Output Schema
 
 ```json
 {
@@ -128,29 +210,9 @@ Search → Results → Property → Room → Selection → Guest → Payment
 
 ---
 
-## 5. 待确认/待设计
+## 6. UI Design
 
-### 5.1 UI 交互设计 (子 Agent)
-- 截图 + 结构化数据展示
-- 前端如何渲染酒店列表、房间选项
-
-### 5.2 Agent SOUL + Audit Agent (子 Agent)
-- 主 Agent SOUL 定义 (防止跑偏)
-- Audit Agent 架构 (输入输出审查)
-
-### 5.3 登录检测
-- 需要探索: 检测 booking.com 是否已登录
-- 方法: 访问某页面, 检查是否被重定向到登录页
-
-### 5.4 UserProfile 接口
-- 抽象接口, 后期可能接 RAG/Database
-- 初期实现: 写死返回用户信息
-
----
-
-## 5. UI Design (from sub-agent)
-
-### 5.1 Layout Structure
+### 6.1 Layout Structure
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -169,7 +231,7 @@ Search → Results → Property → Room → Selection → Guest → Payment
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
-### 5.2 Screenshot Strategy
+### 6.2 Screenshot Strategy
 
 | Scenario | Trigger | Compression |
 |----------|---------|-------------|
@@ -179,16 +241,16 @@ Search → Results → Property → Room → Selection → Guest → Payment
 | User requested | `screenshot_request` | PNG lossless |
 | Error state | Error message | PNG lossless |
 
-### 5.3 WebSocket Messages
+### 6.3 WebSocket Messages
 
 **Backend → Frontend**: `stage_update`, `screenshot_update`, `action_required`, `structured_data`, `error`, `booking_confirmed`
 **Frontend → Backend**: `user_selection`, `voice_command`, `navigate_back`, `cancel_booking`
 
 ---
 
-## 6. Agent SOUL (from sub-agent)
+## 7. Agent SOUL
 
-### 6.1 SELF (Identity)
+### 7.1 SELF (Identity)
 
 ```
 OpenClaw Voice Booking Agent - 酒店预订自动化助手
@@ -198,7 +260,7 @@ OpenClaw Voice Booking Agent - 酒店预订自动化助手
 - 边界: 不完成支付、不存储敏感数据、不修改已预订房间
 ```
 
-### 6.2 OPERATING SYSTEM (规则)
+### 7.2 OPERATING SYSTEM (规则)
 
 | 规则 | 说明 |
 |------|------|
@@ -209,7 +271,7 @@ OpenClaw Voice Booking Agent - 酒店预订自动化助手
 | OS-005 | 最多5间房 |
 | OS-006 | 只创建新预订，不修改已有预订 |
 
-### 6.3 Refusal Conditions
+### 7.3 Refusal Conditions
 
 - 非酒店预订请求 ("天气怎么样？")
 - 超过5间房
@@ -217,7 +279,7 @@ OpenClaw Voice Booking Agent - 酒店预订自动化助手
 - 修改已有预订
 - 恶意意图
 
-### 6.4 Clarification Triggers
+### 7.4 Clarification Triggers
 
 - 缺少目的地/日期
 - 模糊的选择 (便宜的？)
@@ -226,27 +288,27 @@ OpenClaw Voice Booking Agent - 酒店预订自动化助手
 
 ---
 
-## 7. Audit Agent Architecture (from sub-agent)
+## 8. Audit Agent Architecture
 
-### 7.1 Position
+### 8.1 Position
 
 Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandler`
 
-### 7.2 Pre-Audit Checks
+### 8.2 Pre-Audit Checks
 
 - Intent Classification (on-topic vs off-topic)
 - Parameter Validation (required params, range)
 - Safety Check (SOUL rule compliance)
 - Loop Detection (same tool called 3x)
 
-### 7.3 Post-Audit Checks
+### 8.3 Post-Audit Checks
 
 - Page State Validation (DOM state matches expected)
 - Data Extraction (correctly parsed)
 - Price Reasonableness (within 10x expected)
 - Stage Progression (moved forward)
 
-### 7.4 Intervention Levels
+### 8.4 Intervention Levels
 
 | Level | Type | Use Case |
 |-------|------|----------|
@@ -254,7 +316,7 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 | 2 | Hard (Block) | SOUL violation, refuse action |
 | 3 | Emergency (Abort) | Malicious intent, repeated failures |
 
-### 7.5 Metrics Tracked
+### 8.5 Metrics Tracked
 
 - Turn count (>50 warn)
 - Error rate (>5 consecutive errors)
@@ -263,25 +325,32 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 
 ---
 
-## 6. 待办事项
+## 9. 待办事项
 
 ### P1 - 当前迭代
 - [ ] Python MCP SDK 集成 (`uv add mcp`)
 - [ ] BrowserController 实现
 - [ ] 7 个 Stage Tools 实现
 - [ ] TurnContext 状态持久化
-- [ ] 登录检测探索
+- [ ] **登录检测探索** ← 需实际探索
 - [ ] 重试机制 (3次)
 
 ### P2 - 后续迭代
-- [ ] Agent SOUL 定义
-- [ ] Audit Agent 架构
+- [x] Agent SOUL 定义 ✅ (已设计)
+- [x] Audit Agent 架构 ✅ (已设计)
 - [ ] UserProfile (RAG/Database)
-- [ ] UI 交互详细设计
+- [x] UI 交互详细设计 ✅ (已设计)
+
+### P0 - 探索阶段
+- [ ] **Chrome DevTools MCP 实际能力验证** - 需要启动 Chrome 探索
+  - MCP screenshot 支持？
+  - evaluate JS 支持？
+  - 登录检测方法（URL redirect + DOM element）
+- [ ] **Booking.com 实际流程验证** - 确认 7-stage 流程
 
 ---
 
-## 7. Reference
+## 10. Reference
 
 - OpenClaw Booking Skill: `specs/002-browser-booking/SKILL.md`
 - Agent Layer Spec: `specs/001-agent-layer/spec.md`
