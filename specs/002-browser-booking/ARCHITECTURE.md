@@ -342,11 +342,22 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 - [x] UI 交互详细设计 ✅ (已设计)
 
 ### P0 - 探索阶段
-- [ ] **Chrome DevTools MCP 实际能力验证** - 需要启动 Chrome 探索
-  - MCP screenshot 支持？
-  - evaluate JS 支持？
-  - 登录检测方法（URL redirect + DOM element）
-- [ ] **Booking.com 实际流程验证** - 确认 7-stage 流程
+- [x] **Chrome DevTools MCP 实际能力验证** ✅
+  - `list_pages`, `new_page`, `navigate_page` ✅
+  - `take_snapshot`, `take_screenshot` ✅
+  - `click`, `fill` ✅
+  - 快照输出大（>100KB），需分块处理或用截图
+- [x] **Booking.com 流程验证** ✅
+  - 启动参数: `--remote-debugging-port=9222`
+  - Consent 弹窗: checkbox "Select all" → button "Agree"
+  - 弹窗处理: 多语言弹窗、Genius 优惠弹窗需关闭
+  - 搜索表单: `combobox` (目的地) + `button` (日期) + `button` (人数/房间) + `button` (搜索)
+  - 搜索结果 URL: `searchresults.html?ss=Tokyo&...`
+  - 登录检测: 检查 DOM 是否有 "Sign in" / "Register" 链接
+
+### KB-019: Booking.com 弹窗处理
+- Consent 弹窗: checkbox "Select all" → button "Agree"
+- 其他弹窗: "Dismiss" 或 "Stay on Booking.com Global"
 
 ---
 
