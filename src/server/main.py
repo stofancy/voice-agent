@@ -86,12 +86,13 @@ stt = None
 tts = None
 backend = None
 vad: Optional[VoiceActivityDetector] = None
+agent = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage server startup and shutdown."""
-    global stt, tts, backend, vad
+    global stt, tts, backend, vad, agent
 
     # Startup
     logger.info("Initializing OpenClaw Voice server (Bailian Edition)...")
@@ -134,6 +135,24 @@ async def lifespan(app: FastAPI):
             "No markdown, bullet points, code blocks, or special formatting."
         ),
     )
+
+    # Create LangChain agent for non-blocking tool execution
+    from .agent import LANGCHAIN_AVAILABLE, create_booking_agent, create_langchain_llm, StreamController
+
+    if LANGCHAIN_AVAILABLE:
+        try:
+            # Wrap the existing LLM for LangChain
+            langchain_llm = create_langchain_llm(backend)
+            # Create booking agent with hotel tools
+            stream_controller = StreamController()
+            agent = create_booking_agent(langchain_llm, stream_controller)
+            logger.info("✅ LangChain BookingAgent initialized with hotel tools")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to initialize LangChain agent: {e}")
+            agent = None
+    else:
+        logger.warning("⚠️ LangChain not available, agent features disabled")
+        agent = None
 
     vad = VoiceActivityDetector()
     logger.info("✅ OpenClaw Voice server (Bailian) ready!")
@@ -214,6 +233,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     tts=tts,
                     TTS_SAMPLE_RATE=TTS_SAMPLE_RATE,
                     SUBTITLE_STREAMING=SUBTITLE_STREAMING,
+                    agent=agent,
                 )
                 if task is None and session.is_idle:
                     continue

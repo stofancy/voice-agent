@@ -127,20 +127,18 @@ Runtime selection in current code:
 
 **Configuration**:
 - [pyproject.toml](../pyproject.toml) - Dependencies and project metadata
-- [requirements.txt](../requirements.txt) - Pinned versions
 
 ### Commands
 
 | Task | Command |
 |------|---------|
-| **Run locally** | `PYTHONPATH=. python -m src.server.main` |
+| **Run locally** | `python -m src.server.main` |
 | **Create .env** | `cp .env.example .env` (then edit) |
 | **Build Docker** | `docker compose build openclaw-voice` |
 | **Run Docker** | `docker compose up -d` |
 | **View logs** | `docker compose logs -f openclaw-voice` |
 | **Stop** | `docker compose down` |
 | **Tests** | `pytest tests/ -v` |
-| **Format** | `black src/ tests/` |
 | **Lint** | `ruff check src/ tests/` |
 
 ---
@@ -159,19 +157,18 @@ python3 -m venv .venv
 source .venv/bin/activate  # Linux/Mac
 # or: .venv\Scripts\activate  (Windows)
 
-# 3. Install dependencies
-pip install -r requirements.txt
-pip install -e ".[dev]"  # Install extras for development
+# 3. Install dependencies (modern pyproject.toml)
+pip install -e ".[dev]"
 
 # 4. (Optional) Install STT/TTS extras for local models
-pip install torch torchaudio  # For VAD
+pip install -e ".[tts]"
 
 # 5. Configure
 cp .env.example .env
 # Edit .env with your API keys (OPENAI_API_KEY, ALI_BAILIAN_API_KEY, etc.)
 
 # 6. Run
-PYTHONPATH=. python -m src.server.main
+python -m src.server.main
 # Server starts at http://localhost:8765
 ```
 
@@ -320,7 +317,7 @@ OPENCLAW_REQUIRE_AUTH=true docker compose up -d
 | **TTS audio not playing** | Incorrect audio format / codec mismatch | Ensure 16kHz PCM; check browser DevTools audio context |
 | **High latency** | Slow STT/TTS backend | Use `qwen3-asr-flash` for STT; enable streaming TTS |
 | **CORS errors (frontend)** | Browser blocking requests | Server handles CORS; ensure StaticFiles mounted correctly |
-| **Import errors** | Missing dependencies | Run `pip install -r requirements.txt` + `pip install .[dev]` |
+| **Import errors** | Missing dependencies | Run `pip install -e ".[dev]"` |
 
 ---
 
