@@ -368,6 +368,15 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 - Consent 弹窗: checkbox "Select all" → button "Agree"
 - 其他弹窗: "Dismiss" 或 "Stay on Booking.com Global"
 
+### KB-020: 登录检测
+- 未登录: DOM 中存在 "Sign in" / "Register an account" 链接
+- 已登录: 无上述链接，有用户头像或 `bkng` cookie
+- 检测方式:
+  ```javascript
+  document.querySelector('a[href*="signin"]') !== null
+  document.cookie.includes('bkng')  // session cookie
+  ```
+
 ---
 
 ## 10. Reference
