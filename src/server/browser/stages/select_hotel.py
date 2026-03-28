@@ -138,3 +138,7 @@ class BookHotelSelectHotelTool(BookingStage):
         except Exception as e:
             logger.error(f"[BookHotelSelectHotel] Direct extraction failed: {e}")
             return []
+
+    # Note: Natural language selection parsing (e.g., "第二个", "贵一点的")
+    # is handled by the LLM/BookingAgent layer, not by this stage tool.
+    # This tool only extracts and returns structured hotel data.
