@@ -15,14 +15,16 @@ async def test_hotel_tools():
     """Test hotel tools directly."""
     print("🧪 Testing hotel tools...")
 
+    import json
     from src.server.agent.tools.hotel_tool import search_hotels, book_hotel
 
-    result = await search_hotels({"location": "Beijing"})
+    result_str = await search_hotels.ainvoke({"location": "Beijing"})
+    result = json.loads(result_str)
     print(f"  ✓ search_hotels returned {result['count']} hotels")
     for h in result["hotels"]:
         print(f"    - {h['name']}: ${h['price']}/night")
 
-    booking = await book_hotel(
+    booking_str = await book_hotel.ainvoke(
         {
             "hotel_id": "h1",
             "guest_name": "Test User",
@@ -30,6 +32,7 @@ async def test_hotel_tools():
             "checkout": "2026-04-02",
         }
     )
+    booking = json.loads(booking_str)
     print(f"  ✓ book_hotel returned booking_id: {booking['booking_id']}")
     print(f"    Confirmation: {booking['confirmation']}")
 
@@ -85,7 +88,7 @@ async def main():
     assert len(agent._tools) == 2
     print(f"  ✓ BookingAgent created with {len(agent._tools)} tools:")
     for tool in agent._tools:
-        print(f"    - {tool['name']}")
+        print(f"    - {tool.name}")
 
     print(f"\n{'=' * 50}")
     print(f"📊 All tests PASSED")
