@@ -333,7 +333,7 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
 - [ ] BrowserController 实现
 - [ ] 7 个 Stage Tools 实现
 - [ ] TurnContext 状态持久化
-- [ ] **登录检测探索** ← 需实际探索
+- [x] **登录检测探索** ✅ (KB-020)
 - [ ] 重试机制 (3次)
 
 ### P2 - 后续迭代
