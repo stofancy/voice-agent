@@ -125,3 +125,10 @@ tail -f .voice.log
 - `OPENCLAW_TTS_PROVIDER=bailian_realtime` - 使用实时 TTS
 - `OPENCLAW_TTS_TIME_BUFFER_SECONDS=0.5` - TTS 缓冲时间
 - `OPENCLAW_SUBTITLE_STREAMING=true` - 是否流式字幕
+
+## Active Technologies
+- Python 3.10+ + Chrome DevTools MCP (`mcp>=1.26.0`), LangChain tools (`langchain>=0.1.0`), httpx (async HTTP), Chrome browser with remote debugging (003-browser-booking-automation)
+- In-memory `TurnContext` for session state; no persistent database required (003-browser-booking-automation)
+
+## Recent Changes
+- 003-browser-booking-automation: Added Python 3.10+ + Chrome DevTools MCP (`mcp>=1.26.0`), LangChain tools (`langchain>=0.1.0`), httpx (async HTTP), Chrome browser with remote debugging
