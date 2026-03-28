@@ -82,6 +82,55 @@ tests/
 
 **Structure Decision**: Single module `src/server/browser/` with stages subpackage. Integration with existing `src/server/agent/tools/hotel_tool.py` via LangChain tool interface.
 
+### Agent Integration Design
+
+**Architecture Boundary**:
+
+| Layer | Responsibility | Implementation | Input | Output |
+|-------|---------------|----------------|-------|--------|
+| **Stage Tools** | 浏览器操作，数据提取 | `browser/stages/*.py` | context dict | StageResult |
+| **LangChain Wrapper** | 将 Stage Tool 适配为 LC Tool | `agent/tools/stage_wrapper.py` | tool args | dict/str |
+| **BookingAgent** | NL 理解，流程编排，状态管理 | `agent/booking_agent.py` | user text | agent response |
+| **Voice Agent** | 整体协调 | `agent/voice_booking_agent.py` | voice transcript | voice response |
+
+**Key Principle**: Stage Tools 只做**浏览器操作和数据提取**，不包含任何 NL 理解逻辑。NL 理解（"第二个"、"贵一点的"）由 BookingAgent/LLM 负责。
+
+**Flow Example**:
+
+```
+User: "找东京酒店，选贵一点的"
+  → VoiceAgent (STT transcript)
+    → BookingAgent.ainvoke("找东京酒店，选贵一点的")
+      → LLM interprets: location="东京", preference="贵"
+      → BookingAgent calls Stage Tools sequentially:
+        1. search_hotels(location="东京", ...)
+        2. select_hotel() → returns hotels with prices
+        3. LLM interprets "贵" → selects hotel with highest price
+        4. navigate_property()
+        5. select_room()
+        6. confirm_selection()
+        7. fill_guest()
+        8. finalize()
+      → Returns response to VoiceAgent
+    → VoiceAgent (TTS)
+```
+
+**Natural Language Selection Handling**:
+
+| User Input | LLM Interpretation | Action |
+|------------|-------------------|--------|
+| "第二个" | index=2 | Call select_hotel with selected_index=2 |
+| "贵一点的" | price preference | Sort by price desc, pick first |
+| "评分最高的" | rating preference | Sort by rating desc, pick first |
+| "带早餐的" | amenity preference | Filter by breakfast included |
+
+**Integration Points**:
+
+1. **Stage Tool → LangChain Tool**: Each `BookingStage` wrapped as `@tool` with async `ainvoke()`
+2. **BookingAgent → Stage Tools**: Agent calls tools via `tool.ainvoke(tool_args)`
+3. **TurnContext shared**: State passed through between stages via context dict
+4. **WAIT_FOR_SELECTION handling**: Agent receives options list, prompts user for selection
+
 ## Phase 0: Research
 
 ### Research Tasks
