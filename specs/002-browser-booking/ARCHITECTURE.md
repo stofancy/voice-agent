@@ -26,7 +26,7 @@
 | Q16 | 错误处理 | LLM 判断 |
 | Q17 | 用户纠正机制 | LLM 先行判断是否需要特殊处理 |
 | Q18 | 支付页面 | 无需监控，用户手动完成 |
-| Q25 | 数据提取方式 | **A11Y Tree 是正确方式**，包含完整语义化数据（酒店名、评分、价格、房间类型）；输出约 180KB，需**分块处理**或按需提取关键字段 |
+| Q25 | 数据提取方式 | **A11Y Tree 是正确方式**，包含完整语义化数据；输出约 180KB；通过 **Python 解析器** 提取结构化数据（避免 MCP 超限）；关键字段：酒店名、评分、价格(CNY)、位置 |
 
 ### 关键架构确认
 
@@ -361,9 +361,11 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
   - 确认日期后需重新点击 Search 按钮
 - [x] **Q25 数据提取探索** ✅
   - **A11Y Tree 包含完整语义化数据** ✅
-  - 酒店名称: StaticText 节点
-  - 评分: `Scored X.X` 格式
+  - **Python 解析器**: `parse_a11y_tree.py` 从 ~180KB 文件提取结构化 JSON
+  - 酒店名称: `link "xxx Opens in new window" url="...hotel..."`
+  - 评分: `Scored X.X Excellent X,XXX reviews` 格式
   - 价格: `Current price CNY XX,XXX` 格式
+  - 位置: `xxx· Show on map` 格式
   - **前提条件**: 必须选择日期后价格才显示
 
 ### KB-019: Booking.com 弹窗处理
@@ -377,6 +379,15 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
   ```javascript
   document.querySelector('a[href*="signin"]') !== null
   document.cookie.includes('bkng')  // session cookie
+  ```
+
+### KB-021: A11Y Tree 数据提取方案
+- **问题**: `take_snapshot` 输出约 180KB，超 MCP token 限制
+- **方案**: Python 解析器从保存的文件中提取结构化数据
+- **实现**: `parse_a11y_tree.py` - 正则表达式提取酒店列表
+- **数据格式**:
+  ```python
+  [{"name": "Hotel Name", "price": "CNY 12,123", "score": "9.5", "location": "...", "url": "..."}]
   ```
 
 ---
