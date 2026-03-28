@@ -26,7 +26,7 @@
 | Q16 | 错误处理 | LLM 判断 |
 | Q17 | 用户纠正机制 | LLM 先行判断是否需要特殊处理 |
 | Q18 | 支付页面 | 无需监控，用户手动完成 |
-| Q25 | 数据提取方式 | A11Y Tree 是语义化层（role + name + state），但输出大（>90KB），需分块处理 |
+| Q25 | 数据提取方式 | A11Y Tree 是语义化层（role + name + state），但输出大（>90KB），需分块处理；**价格数据不在 DOM 中**，需通过截图视觉提取或进入详情页 |
 
 ### 关键架构确认
 
@@ -355,6 +355,14 @@ Wrapper pattern around BookingAgent, integrated via LangChain `BaseCallbackHandl
   - 搜索表单: `combobox` (目的地) + `button` (日期) + `button` (人数/房间) + `button` (搜索)
   - 搜索结果 URL: `searchresults.html?ss=Tokyo&...`
   - 登录检测: 检查 DOM 是否有 "Sign in" / "Register" 链接
+- [x] **Q23/Q24 探索** ✅
+  - 日期选择: 点击 "Check-in date" 按钮 → 日历弹出 → 点击日期选择
+  - 人数/房间: 点击人数按钮 → 下拉菜单选择
+  - 确认日期后需重新点击 Search 按钮
+- [x] **Q25 数据提取探索** ✅
+  - 酒店名称: `document.querySelectorAll('[data-testid="property-card"]')` ✅
+  - 评分: 可通过 DOM 提取 ✅
+  - **价格: 不在 DOM 中，需截图或进入详情页**
 
 ### KB-019: Booking.com 弹窗处理
 - Consent 弹窗: checkbox "Select all" → button "Agree"
